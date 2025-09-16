@@ -10,6 +10,8 @@ spec:
   selector:
     matchLabels:
       app: ingress-grpc
+  strategy:
+    type: RollingUpdate
   template:
     metadata:
       labels:
@@ -59,4 +61,3 @@ spec:
                   number: 80
             path: /
             pathType: Prefix
-

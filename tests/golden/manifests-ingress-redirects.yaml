@@ -10,6 +10,8 @@ spec:
   selector:
     matchLabels:
       app: ingress-redirects
+  strategy:
+    type: RollingUpdate
   template:
     metadata:
       labels:
@@ -79,4 +81,3 @@ spec:
                   number: 80
             path: /(.*)?
             pathType: ImplementationSpecific
-

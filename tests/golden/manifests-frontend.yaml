@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations: {}
+  labels: {}
+  name: frontend-app
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: frontend-app
+  strategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: frontend-app
+    spec:
+      containers:
+        - env:
+            - name: NAIS_FRONTEND_TELEMETRY_COLLECTOR_URL
+              value: http://telemetry-collector
+          image: nginx:1.25
+          name: frontend-app
+          ports:
+            - containerPort: 8080
+              name: http
+          volumeMounts:
+            - mountPath: /path/to/nais.js
+              name: frontend-config
+              readOnly: true
+      volumes:
+        - configMap:
+            name: frontend-app-frontend-config
+          name: frontend-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  annotations: {}
+  labels: {}
+  name: frontend-app
+  namespace: default
+spec:
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+  selector:
+    app: frontend-app
+  type: ClusterIP
+---
+apiVersion: v1
+data:
+  nais.js: |
+    export default {
+      telemetryCollectorURL: 'http://telemetry-collector',
+      app: {
+        name: 'frontend-app',
+        version:   }
+    };
+kind: ConfigMap
+metadata:
+  annotations: {}
+  labels: {}
+  name: frontend-app-frontend-config
+  namespace: default

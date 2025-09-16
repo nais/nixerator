@@ -8,10 +8,13 @@ let types = lib.types; in
       description = "Create a ServiceMonitor for Prometheus scraping.";
     };
     kind = lib.mkOption {
-      type = types.enum [ "PodMonitor" "ServiceMonitor" ];
+      type = types.enum [ "PodMonitor" "ServiceMonitor" "Annotations" ];
       default = "PodMonitor";
-      description = "Choose which CRD to emit for scraping.";
+      description = "Choose which integration to emit: CRDs or legacy annotations.";
     };
+    # Compatibility: simple path/port at root (used when kind = "Annotations" as well)
+    path = lib.mkOption { type = types.nullOr types.str; default = null; description = "Metrics path for annotations or default endpoint."; };
+    port = lib.mkOption { type = types.nullOr types.str; default = null; description = "Metrics port name/number as string for annotations or default endpoint."; };
     endpoints = lib.mkOption {
       type = types.listOf (types.submodule ({ ... }: { options = {
         port = lib.mkOption { type = types.str; default = "http"; description = "Service port name to scrape."; };

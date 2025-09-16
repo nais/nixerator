@@ -1,0 +1,110 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations: {}
+  labels:
+    secure-logs: enabled
+  name: securelogs-app
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: securelogs-app
+      secure-logs: enabled
+  strategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: securelogs-app
+        secure-logs: enabled
+    spec:
+      containers:
+        - image: nginx:1.25
+          name: securelogs-app
+          ports:
+            - containerPort: 8080
+              name: http
+          volumeMounts:
+            - mountPath: /secure-logs
+              name: secure-logs
+      initContainers:
+        - command:
+            - /fluent-bit/bin/fluent-bit
+            - -c
+            - /fluent-bit/etc-operator/fluent-bit.conf
+          env:
+            - name: NAIS_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: NAIS_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: NAIS_APP_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['app']
+          image: fluentbit-image
+          imagePullPolicy: IfNotPresent
+          name: secure-logs-fluentbit
+          resources:
+            limits:
+              memory: 100M
+            requests:
+              cpu: 10m
+              memory: 50M
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            privileged: false
+            readOnlyRootFilesystem: true
+            runAsGroup: 1065
+            runAsNonRoot: true
+            runAsUser: 1065
+            seccompProfile:
+              type: RuntimeDefault
+          volumeMounts:
+            - mountPath: /secure-logs
+              name: secure-logs
+            - mountPath: /fluent-bit/etc-operator
+              name: secure-logs-config
+              readOnly: true
+            - mountPath: /tail-db
+              name: secure-logs-positiondb
+            - mountPath: /buffers
+              name: secure-logs-buffers
+      volumes:
+        - emptyDir:
+            sizeLimit: 128M
+          name: secure-logs
+        - configMap:
+            defaultMode: 420
+            name: secure-logs-fluentbit
+          name: secure-logs-config
+        - emptyDir: {}
+          name: secure-logs-positiondb
+        - emptyDir: {}
+          name: secure-logs-buffers
+        - emptyDir: {}
+          name: writable-tmp
+---
+apiVersion: v1
+kind: Service
+metadata:
+  annotations: {}
+  labels: {}
+  name: securelogs-app
+  namespace: default
+spec:
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+  selector:
+    app: securelogs-app
+  type: ClusterIP

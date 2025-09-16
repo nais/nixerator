@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations: {}
+  labels: {}
+  name: vault-basic
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vault-basic
+  strategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: vault-basic
+    spec:
+      containers:
+        - image: nginx:1.25
+          name: vault-basic
+          ports:
+            - containerPort: 8080
+              name: http
+      initContainers:
+        - args:
+            - -v=10
+            - -logtostderr
+            - -one-shot
+            - -vault=https://vault.adeo.no
+            - -save-token=/var/run/secrets/nais.io/vault/vault_token
+            - -cn=secret:/kv/preprod/fss/vault-basic/default:dir=/var/run/secrets/nais.io/vault,fmt=flatten,retries=1
+          env:
+            - name: VAULT_AUTH_METHOD
+              value: kubernetes
+            - name: VAULT_SIDEKICK_ROLE
+              value: vault-basic
+            - name: VAULT_K8S_LOGIN_PATH
+              value: auth/kubernetes/preprod/fss/login
+          image: navikt/vault-sidekick:v0.3.10-d122b16
+          name: vks-init
+          volumeMounts:
+            - mountPath: /var/run/secrets/nais.io/vault
+              name: vault-volume
+              subPath: vault/var/run/secrets/nais.io/vault
+---
+apiVersion: v1
+kind: Service
+metadata:
+  annotations: {}
+  labels: {}
+  name: vault-basic
+  namespace: default
+spec:
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+  selector:
+    app: vault-basic
+  type: ClusterIP

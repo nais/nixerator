@@ -1,0 +1,97 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations: {}
+  labels: {}
+  name: gcp-iam
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gcp-iam
+  strategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: gcp-iam
+    spec:
+      containers:
+        - image: nginx:1.25
+          name: gcp-iam
+          ports:
+            - containerPort: 8080
+              name: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  annotations: {}
+  labels: {}
+  name: gcp-iam
+  namespace: default
+spec:
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+  selector:
+    app: gcp-iam
+  type: ClusterIP
+---
+apiVersion: iam.cnrm.cloud.google.com/v1beta1
+kind: IAMServiceAccount
+metadata:
+  annotations:
+    cnrm.cloud.google.com/project-id: google-project-id
+    nais.io/team: default
+  name: gcp-iam-default
+  namespace: serviceaccounts
+spec:
+  displayName: gcp-iam
+---
+apiVersion: iam.cnrm.cloud.google.com/v1beta1
+kind: IAMPolicy
+metadata:
+  annotations:
+    cnrm.cloud.google.com/project-id: google-project-id
+  name: gcp-iam-default
+  namespace: serviceaccounts
+spec:
+  bindings:
+    - members:
+        - serviceAccount:google-project-id.svc.id.goog[default/gcp-iam]
+      role: roles/iam.workloadIdentityUser
+  resourceRef:
+    apiVersion: iam.cnrm.cloud.google.com/v1beta1
+    kind: IAMServiceAccount
+    name: gcp-iam-default
+---
+apiVersion: iam.cnrm.cloud.google.com/v1beta1
+kind: IAMPolicyMember
+metadata:
+  annotations:
+    cnrm.cloud.google.com/project-id: team-project-id
+  name: gcp-iam-default
+  namespace: default
+spec:
+  member: serviceAccount:gcp-iam-default@google-project-id.iam.gserviceaccount.com
+  resourceRef:
+    apiVersion: storage.cnrm.cloud.google.com/v1beta1
+    kind: StorageBucket
+    name: mybucket
+  role: roles/storage.objectViewer
+---
+apiVersion: storage.cnrm.cloud.google.com/v1beta1
+kind: StorageBucket
+metadata:
+  annotations:
+    cnrm.cloud.google.com/deletion-policy: abandon
+    cnrm.cloud.google.com/project-id: team-project-id
+  labels: {}
+  name: mybucket
+  namespace: default
+spec:
+  location: europe-north1
+  publicAccessPrevention: inherited

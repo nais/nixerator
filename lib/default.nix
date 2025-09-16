@@ -27,6 +27,7 @@ rec {
     resources ? null,
     volumeMounts ? [],
     volumes ? [],
+    initContainers ? [],
     livenessProbe ? null,
     readinessProbe ? null,
     startupProbe ? null,
@@ -73,6 +74,7 @@ rec {
               )
             ];
           }
+          // (lib.optionalAttrs (initContainers != []) { inherit initContainers; })
           // (lib.optionalAttrs (volumes != []) { inherit volumes; })
           // (lib.optionalAttrs (serviceAccountName != null) { inherit serviceAccountName; })
           // (lib.optionalAttrs (imagePullSecrets != []) { imagePullSecrets = map (n: { name = n; }) imagePullSecrets; })
@@ -306,6 +308,94 @@ rec {
       };
     };
 
+  # GCP Config Connector (CNRM) resources (minimal)
+  mkStorageBucket = {
+    name,
+    namespace,
+    projectId,
+    location ? "europe-north1",
+    deletionPolicy ? "abandon",
+    labels ? {},
+    annotations ? {}
+  }:
+    {
+      apiVersion = "storage.cnrm.cloud.google.com/v1beta1";
+      kind = "StorageBucket";
+      metadata = {
+        inherit name namespace;
+        labels = labels;
+        annotations = annotations // {
+          "cnrm.cloud.google.com/project-id" = projectId;
+          "cnrm.cloud.google.com/deletion-policy" = deletionPolicy;
+        };
+      };
+      spec = {
+        inherit location;
+        publicAccessPrevention = "inherited";
+      };
+    };
+
+  mkIAMServiceAccount = {
+    name,
+    projectId,
+    displayName,
+    namespace ? "serviceaccounts",
+    annotations ? {}
+  }:
+    {
+      apiVersion = "iam.cnrm.cloud.google.com/v1beta1";
+      kind = "IAMServiceAccount";
+      metadata = {
+        inherit name namespace;
+        annotations = annotations // { "cnrm.cloud.google.com/project-id" = projectId; };
+      };
+      spec.displayName = displayName;
+    };
+
+  mkIAMPolicy = {
+    name,
+    namespace ? "serviceaccounts",
+    projectId,
+    memberNamespace,
+    memberName
+  }:
+    {
+      apiVersion = "iam.cnrm.cloud.google.com/v1beta1";
+      kind = "IAMPolicy";
+      metadata = {
+        inherit name namespace;
+        annotations."cnrm.cloud.google.com/project-id" = projectId;
+      };
+      spec = {
+        bindings = [ {
+          role = "roles/iam.workloadIdentityUser";
+          members = [ "serviceAccount:${projectId}.svc.id.goog[${memberNamespace}/${memberName}]" ];
+        } ];
+        resourceRef = { apiVersion = "iam.cnrm.cloud.google.com/v1beta1"; kind = "IAMServiceAccount"; inherit name; };
+      };
+    };
+
+  mkIAMPolicyMember = {
+    name,
+    namespace,
+    teamProjectId,
+    googleProjectId,
+    bucketName
+  }:
+    {
+      apiVersion = "iam.cnrm.cloud.google.com/v1beta1";
+      kind = "IAMPolicyMember";
+      metadata = {
+        inherit name namespace;
+        annotations."cnrm.cloud.google.com/project-id" = teamProjectId;
+      };
+      spec = {
+        member = "serviceAccount:${name}@${googleProjectId}.iam.gserviceaccount.com";
+        role = "roles/storage.objectViewer";
+        resourceRef = { apiVersion = "storage.cnrm.cloud.google.com/v1beta1"; kind = "StorageBucket"; name = bucketName; };
+      };
+    };
+
   mkPodMonitor = {
     name,
     namespace ? "default",
@@ -422,6 +512,10 @@ rec {
       pdbCfg = cfg.pdb or { enable = false; };
       saCfg = cfg.serviceAccount or { enable = false; };
       cmCfg = cfg.configMaps or {};
+      feCfg = cfg.frontend or {};
+      slCfg = cfg.securelogs or { enable = false; };
+      gcpCfg = cfg.gcp or {};
+      vaultCfg = cfg.vault or { enable = false; };
       npCfg = cfg.networkPolicy or { enable = false; };
       apCfg = cfg.accessPolicy or { enable = false; };
       fqdnCfg = cfg.fqdnPolicy or { enable = false; rules = []; };
@@ -529,7 +623,25 @@ rec {
       podAnn = {}
         // (lib.optionalAttrs (obs.defaultContainer or false) { "kubectl.kubernetes.io/default-container" = name; })
         // (lib.optionalAttrs ((obs.logformat or "") != "") { "nais.io/logformat" = obs.logformat; })
-        // (lib.optionalAttrs ((obs.logtransform or "") != "") { "nais.io/logtransform" = obs.logtransform; });
+        // (lib.optionalAttrs ((obs.logtransform or "") != "") { "nais.io/logtransform" = obs.logtransform; })
+        // (let ai = obs.autoInstrumentation or { enabled = false; }; in
+             lib.optionalAttrs (ai.enabled or false && (ai.appConfig or null) != null) (
+               {
+                 ${"instrumentation.opentelemetry.io/inject-" + (ai.runtime or "java")} = ai.appConfig;
+                 "instrumentation.opentelemetry.io/container-names" = name;
+               }
+             )
+          );
+      # Prometheus legacy annotations (if requested)
+      promLegacyAnn = let p = cfg.prometheus or { enable = false; }; in
+        if (p.enable or false) && (p.kind or "PodMonitor") == "Annotations" then (
+          let
+            annPort = if (p.port or null) != null then p.port else toString serviceCfg.port;
+            annPath = p.path or null;
+          in {}
+            // { "prometheus.io/scrape" = "true"; "prometheus.io/port" = annPort; }
+            // (lib.optionalAttrs (annPath != null) { "prometheus.io/path" = annPath; })
+        ) else {};
 
       # Pod security context and /tmp writable emptyDir
       psec = cfg.podSecurity or { enable = false; };
@@ -563,7 +675,32 @@ rec {
         { name = "GOOGLE_CLOUD_PROJECT"; value = denv.googleTeamProjectId; }
         { name = "GCP_TEAM_PROJECT_ID"; value = denv.googleTeamProjectId; }
       ] else [];
-      envFinal = (ensureEnv cfg.env) ++ baseEnv ++ gcpEnv;
+      # Observability: build OTEL env when autoInstrumentation enabled
+      ai = (obs.autoInstrumentation or { enabled = false; });
+      otelEnabled = ai.enabled or false;
+      otelDestIds = map (d: d.id) (ai.destinations or []);
+      otelBackend = if otelDestIds == [] then null else lib.concatStringsSep ";" otelDestIds;
+      existingOtelAttrs = cfg.env.OTEL_RESOURCE_ATTRIBUTES or null;
+      existingPairs =
+        if existingOtelAttrs == null then [] else
+          lib.filter (s: s != "") (lib.splitString "," existingOtelAttrs);
+      filterOut = key: pairs: lib.filter (p: (lib.substring 0 (lib.stringLength key + 1) p) != (key + "=")) pairs;
+      extraPairs = filterOut "service.name" (filterOut "service.namespace" existingPairs);
+      basePairs = [ "service.name=${name}" "service.namespace=${namespace}" ]
+        ++ (lib.optional (otelBackend != null) ("nais.backend=" + otelBackend));
+      otelAttrs = lib.concatStringsSep "," (basePairs ++ extraPairs);
+      mkOtelEnv =
+        let coll = ai.collector or null; in
+        if !otelEnabled || coll == null then [] else [
+          { name = "OTEL_SERVICE_NAME"; value = name; }
+          { name = "OTEL_RESOURCE_ATTRIBUTES"; value = otelAttrs; }
+          { name = "OTEL_EXPORTER_OTLP_ENDPOINT"; value = (if (coll.tls or false) then "https://" else "http://") + coll.service + "." + coll.namespace + ":" + toString (coll.port or 4317); }
+          { name = "OTEL_EXPORTER_OTLP_PROTOCOL"; value = (coll.protocol or "grpc"); }
+          { name = "OTEL_EXPORTER_OTLP_INSECURE"; value = (if (coll.tls or false) then "false" else "true"); }
+        ];
+      envBase = (ensureEnv cfg.env);
+      envNoOtel = lib.filter (e: (e.name or "") != "OTEL_RESOURCE_ATTRIBUTES") envBase;
+      envFinal = envNoOtel ++ baseEnv ++ gcpEnv ++ mkOtelEnv;
       # Aiven secret/env/volumes injection
       sanitizeInst = s:
         lib.toUpper (lib.replaceStrings ["-" "." ":" "/" " "] ["_" "_" "_" "_" "_"] s);
@@ -621,14 +758,69 @@ rec {
       anyAiven = aivenEnabled && ((aivenKafka != null) || (aivenOpenSearch != null) || (aivenValkey != []));
       labelsWithAiven = labelsWithTeam // (lib.optionalAttrs anyAiven { aiven = "enabled"; });
 
+      # Secure logs: labels, volumes, initContainer, mounts
+      secureLogsEnabled = slCfg.enable or false;
+      secureLogsLabel = lib.optionalAttrs secureLogsEnabled { "secure-logs" = "enabled"; };
+      # Logging flow labels
+      logCfg = obs.logging or { enabled = false; };
+      logDests = map (d: d.id) (logCfg.destinations or []);
+      logLabels = if (logCfg.enabled or false) && (logDests != []) then (
+        { "logs.nais.io/flow-default" = "false"; }
+        // (lib.listToAttrs (map (id: { name = "logs.nais.io/flow-" + id; value = "true"; }) logDests))
+      ) else {};
+      secureLogsVolumes = if secureLogsEnabled then [
+        { name = "secure-logs"; emptyDir = { sizeLimit = slCfg.sizeLimit or "128M"; }; }
+        { name = "secure-logs-config"; configMap = { name = "secure-logs-fluentbit"; defaultMode = 420; }; }
+        { name = "secure-logs-positiondb"; emptyDir = {}; }
+        { name = "secure-logs-buffers"; emptyDir = {}; }
+        { name = "writable-tmp"; emptyDir = {}; }
+      ] else [];
+      secureLogsMounts = if secureLogsEnabled then [
+        { name = "secure-logs"; mountPath = "/secure-logs"; }
+      ] else [];
+      secureLogsInitContainers = if secureLogsEnabled then [
+        {
+          name = "secure-logs-fluentbit";
+          image = slCfg.image;
+          imagePullPolicy = "IfNotPresent";
+          command = [ "/fluent-bit/bin/fluent-bit" "-c" "/fluent-bit/etc-operator/fluent-bit.conf" ];
+          env = [
+            { name = "NAIS_NODE_NAME"; valueFrom.fieldRef.fieldPath = "spec.nodeName"; }
+            { name = "NAIS_NAMESPACE"; valueFrom.fieldRef.fieldPath = "metadata.namespace"; }
+            { name = "NAIS_APP_NAME"; valueFrom.fieldRef.fieldPath = "metadata.labels['app']"; }
+          ];
+          resources = {
+            limits.memory = "100M";
+            requests = { cpu = "10m"; memory = "50M"; };
+          };
+          securityContext = {
+            privileged = false;
+            allowPrivilegeEscalation = false;
+            capabilities.drop = [ "ALL" ];
+            readOnlyRootFilesystem = true;
+            runAsNonRoot = true;
+            runAsUser = 1065;
+            runAsGroup = 1065;
+            seccompProfile.type = "RuntimeDefault";
+          };
+          volumeMounts = [
+            { name = "secure-logs"; mountPath = "/secure-logs"; }
+            { name = "secure-logs-config"; mountPath = "/fluent-bit/etc-operator"; readOnly = true; }
+            { name = "secure-logs-positiondb"; mountPath = "/tail-db"; }
+            { name = "secure-logs-buffers"; mountPath = "/buffers"; }
+          ];
+        }
+      ] else [];
+
       deployment = mkDeployment {
         name = name;
         namespace = namespace;
-        labels = labelsWithAiven // ttlLabel;
+        labels = labelsWithAiven // secureLogsLabel // logLabels // ttlLabel;
         annotations = annotations // reloaderAnn // ttlAnn;
         image = cfg.image;
         replicas = cfg.replicas;
-        env = envFinal ++ aivenEnv;
+        env = envFinal ++ aivenEnv
+          ++ (let turl = (feCfg.telemetryUrl or null); in lib.optional (turl != null) { name = "NAIS_FRONTEND_TELEMETRY_COLLECTOR_URL"; value = turl; });
         command = cfg.command or [];
         ports = let
           ep = (if (promCfg.endpoints or []) != [] then lib.head promCfg.endpoints else { port = "http"; path = "/metrics"; });
@@ -637,10 +829,11 @@ rec {
         in base ++ extra;
         envFrom = lib.filter (x: x != {}) envFrom;
         resources = (if (resourcesCfg.limits or {}) == {} && (resourcesCfg.requests or {}) == {} then null else resourcesCfg);
-        volumeMounts = let ks = aivenKafka; in (filesMounts ++ tmpMount)
+        volumeMounts = let ks = aivenKafka; in (filesMounts ++ tmpMount ++ secureLogsMounts)
           ++ (if ks != null && (ks.secretName or null) != null && (ks.mountCredentials or true)
-            then [ { name = "aiven-credentials"; mountPath = ks.mountPath or "/var/run/secrets/nais.io/kafka"; readOnly = true; } ] else []);
-        volumes = let ks = aivenKafka; in (filesVolumes ++ tmpVol)
+            then [ { name = "aiven-credentials"; mountPath = ks.mountPath or "/var/run/secrets/nais.io/kafka"; readOnly = true; } ] else [])
+          ++ (let gen = feCfg.generatedConfig or null; in lib.optional (gen != null && (feCfg.telemetryUrl or null) != null) { name = "frontend-config"; mountPath = gen.mountPath; readOnly = true; });
+        volumes = let ks = aivenKafka; in (filesVolumes ++ tmpVol ++ secureLogsVolumes)
           ++ (if ks != null && (ks.secretName or null) != null && (ks.mountCredentials or true)
             then [ { name = "aiven-credentials"; secret = { secretName = ks.secretName; items = [
               { key = "KAFKA_CERTIFICATE"; path = "kafka.crt"; }
@@ -648,12 +841,44 @@ rec {
               { key = "KAFKA_CA"; path = "ca.crt"; }
               { key = "client.keystore.p12"; path = "client.keystore.p12"; }
               { key = "client.truststore.jks"; path = "client.truststore.jks"; }
-            ]; }; } ] else []);
+            ]; }; } ] else [])
+          ++ (let gen = feCfg.generatedConfig or null; in lib.optional (gen != null && (feCfg.telemetryUrl or null) != null) { name = "frontend-config"; configMap = { name = "${name}-frontend-config"; }; });
+        initContainers = secureLogsInitContainers
+          ++ (let v = vaultCfg; in
+            if (v.enable or false) && (v.address or null) != null && (v.kvBasePath or null) != null && (v.authPath or null) != null then
+              [
+                {
+                  name = "vks-init";
+                  image = v.sidekickImage or "navikt/vault-sidekick:latest";
+                  args = [
+                    "-v=10" "-logtostderr" "-one-shot"
+                    ("-vault=" + v.address)
+                    "-save-token=/var/run/secrets/nais.io/vault/vault_token"
+                  ] ++ (
+                    let
+                      defaultKV = v.kvBasePath + "/" + name + "/" + namespace;
+                      defaultMount = "/var/run/secrets/nais.io/vault";
+                      cnDefault = "-cn=secret:" + defaultKV + ":dir=" + defaultMount + ",fmt=flatten,retries=1";
+                      userCns = lib.concatMap (p: [ ("-cn=secret:" + p.kvPath + ":dir=" + p.mountPath + ",fmt=flatten,retries=1") ]) (v.paths or []);
+                    in [ cnDefault ] ++ userCns
+                  );
+                  env = [
+                    { name = "VAULT_AUTH_METHOD"; value = "kubernetes"; }
+                    { name = "VAULT_SIDEKICK_ROLE"; value = name; }
+                    { name = "VAULT_K8S_LOGIN_PATH"; value = v.authPath; }
+                  ];
+                  volumeMounts = [
+                    { name = "vault-volume"; mountPath = "/var/run/secrets/nais.io/vault"; subPath = "vault/var/run/secrets/nais.io/vault"; }
+                  ] ++ (lib.concatMap (p: [ { name = "vault-volume"; mountPath = p.mountPath; subPath = "vault" + p.mountPath; } ]) (v.paths or []));
+                }
+              ]
+            else []
+          );
         livenessProbe = livenessProbe;
         readinessProbe = readinessProbe;
         startupProbe = startupProbe;
         lifecycle = lifecycle;
-        podAnnotations = podAnn;
+        podAnnotations = podAnn // promLegacyAnn;
         podSecurityContext = psecContext;
         tolerations = tolerations;
         affinity = affinity;
@@ -749,6 +974,32 @@ rec {
         labels = labelsWithTeam;
         annotations = annotations;
       }) cmCfg;
+      # Frontend generated config (nais.js)
+      frontendConfig =
+        let
+          gen = feCfg.generatedConfig or null;
+          turl = feCfg.telemetryUrl or null;
+        in if gen == null || turl == null then [] else (
+          let
+            cmName = "${name}-frontend-config";
+            js = ''
+export default {
+  telemetryCollectorURL: '${turl}',
+  app: {
+    name: '${name}',
+    version: '' + ''
+  }
+};
+'';
+            cm = mkConfigMap {
+              name = cmName;
+              inherit namespace;
+              labels = labelsWithTeam;
+              annotations = annotations;
+              data = { "nais.js" = js; };
+            };
+          in [ cm ]
+        );
       networkPolicy = lib.optional (npCfg.enable or false) (mkNetworkPolicy ({ name = name; namespace = namespace; labels = labelsWithTeam; annotations = annotations; }
         // (lib.optionalAttrs (npCfg ? policyTypes) { policyTypes = npCfg.policyTypes; })
         // (lib.optionalAttrs (npCfg ? podSelector) { podSelector = npCfg.podSelector; })
@@ -780,14 +1031,21 @@ rec {
           obCidrs = (outbound.allowedCIDRs or []) ++ (if (aivenRange != null && aivenRange != "") then [ aivenRange ] else []);
           obPorts = outbound.allowedPorts or [];
           obAllowDNS = outbound.allowDNS or false;
-          egressRules = if allowAll then [] else (
+          # If OTEL collector is configured, allow egress to it
+          otelEgress = if otelEnabled && (ai.collector or null) != null then [
+            {
+              to = [ { namespaceSelector = { matchLabels = { "kubernetes.io/metadata.name" = ai.collector.namespace; }; };
+                       podSelector = { matchLabels = (ai.collector.labels or {}); }; } ];
+            }
+          ] else [];
+          egressRules = if allowAll then otelEgress else (
             let
               nsPeers = map (ns: { namespaceSelector = { matchLabels = { "kubernetes.io/metadata.name" = ns; }; }; }) obNs;
               cidrPeers = map (cidr: { ipBlock = { inherit cidr; }; }) obCidrs;
               ports = mkPorts obPorts;
               dnsRule = if obAllowDNS then [ { ports = [ { protocol = "UDP"; port = 53; } ]; } ] else [];
               baseRule = if (nsPeers ++ cidrPeers) == [] && ports == [] then [] else [ ({ to = nsPeers ++ cidrPeers; } // (lib.optionalAttrs (ports != []) { inherit ports; })) ];
-            in baseRule ++ dnsRule
+            in baseRule ++ dnsRule ++ otelEgress
           );
           policyTypes = []
             ++ (if inboundRules != [] then [ "Ingress" ] else [])
@@ -803,8 +1061,20 @@ rec {
             ingress = inboundRules;
             egress = egressRules;
           });
+      tracingNetworkPolicy = lib.optional (otelEnabled && (ai.collector or null) != null) (
+        mkNetworkPolicy {
+          name = "${name}-tracing";
+          namespace = namespace;
+          labels = labelsWithTeam;
+          annotations = annotations;
+          policyTypes = [ "Egress" ];
+          podSelector = { app = name; };
+          egress = [ { to = [ { namespaceSelector = { matchLabels = { "kubernetes.io/metadata.name" = ai.collector.namespace; }; };
+                                 podSelector = { matchLabels = (ai.collector.labels or {}); }; } ]; } ];
+        }
+      );
       # Prometheus scraping resource
-      serviceMonitor = lib.optional (promCfg.enable or false) (
+      serviceMonitor = lib.optional ((promCfg.enable or false) && ((promCfg.kind or "PodMonitor") != "Annotations")) (
         let ep = (if (promCfg.endpoints or []) != [] then lib.head promCfg.endpoints else { port = "http"; path = "/metrics"; }); in
         if (promCfg.kind or "PodMonitor") == "PodMonitor" then
           mkPodMonitor {
@@ -880,6 +1150,67 @@ rec {
         type = s.type;
       } // (lib.optionalAttrs (s.data != {}) { data = s.data; })
         // (lib.optionalAttrs (s.stringData != {}) { stringData = s.stringData; }))) secretsCfg;
+      # GCP resources (StorageBucket)
+      gcpBuckets = lib.concatMap (b:
+        if (gcpCfg.projectId or null) != null then [ (mkStorageBucket {
+          name = b.name;
+          namespace = namespace;
+          projectId = gcpCfg.projectId;
+          location = b.location or "europe-north1";
+          deletionPolicy = b.deletionPolicy or "abandon";
+          labels = labelsWithTeam;
+          annotations = annotations;
+        }) ] else []
+      ) (gcpCfg.buckets or []);
+      # GCP BigQuery datasets (NAIS CRD) + Project IAM jobUser binding
+      bqDatasets = lib.concatMap (d:
+        let
+          googleProjectId = gcpCfg.googleProjectId or gcpCfg.projectId or null;
+          teamProjectId = gcpCfg.projectId or null;
+          saName = name + "-" + namespace;
+          saEmail = if googleProjectId == null then null else "${saName}@${googleProjectId}.iam.gserviceaccount.com";
+          normName = lib.toLower (lib.replaceStrings [" " "-" "."] ["_" "_" "_"] d.name);
+          role = if (d.permission or "READ") == "READWRITE" then "WRITER" else "READER";
+          dataset = {
+            apiVersion = "google.nais.io/v1";
+            kind = "BigQueryDataset";
+            metadata = ({ name = name; inherit namespace; }
+              // (lib.optionalAttrs (d.cascadingDelete or false) { annotations."cnrm.cloud.google.com/delete-contents-on-destroy" = "true"; }));
+            spec = ({ name = normName; location = "europe-north1"; access = (if saEmail == null then [] else [ { inherit role; userByEmail = saEmail; } ]); }
+              // (lib.optionalAttrs ((d.description or null) != null) { description = d.description; }));
+          };
+          iam = if teamProjectId != null && saEmail != null then [
+            {
+              apiVersion = "iam.cnrm.cloud.google.com/v1beta1";
+              kind = "IAMPolicyMember";
+              metadata = { name = saName; inherit namespace; annotations."cnrm.cloud.google.com/project-id" = teamProjectId; };
+              spec = { member = "serviceAccount:${saEmail}"; role = "roles/bigquery.jobUser"; resourceRef = { kind = "Project"; };
+              };
+            }
+          ] else [];
+        in [ dataset ] ++ iam
+      ) (gcpCfg.bigQueryDatasets or []);
+      # Optional IAM helpers for buckets (service account + workload identity + viewer)
+      gcpIam =
+        let
+          # Simple name (no hashing) for golden stability
+          saName = name + "-" + namespace;
+          googleProjectId = gcpCfg.googleProjectId or gcpCfg.projectId or null;
+          teamProjectId = gcpCfg.projectId or null;
+          iam = gcpCfg.iam or { createServiceAccount = false; enableWorkloadIdentityBinding = false; grantBucketViewer = false; };
+          needSa = (iam.createServiceAccount or false) && (googleProjectId != null);
+          firstBucketName = if (gcpCfg.buckets or []) == [] then null else (lib.head gcpCfg.buckets).name;
+        in []
+          ++ (lib.optional needSa (mkIAMServiceAccount {
+            name = saName; projectId = googleProjectId; displayName = name; namespace = "serviceaccounts";
+            annotations = { "nais.io/team" = namespace; };
+          }))
+          ++ (lib.optional ((iam.enableWorkloadIdentityBinding or false) && needSa) (mkIAMPolicy {
+            name = saName; namespace = "serviceaccounts"; projectId = googleProjectId; memberNamespace = namespace; memberName = name;
+          }))
+          ++ (lib.optional ((iam.grantBucketViewer or false) && (teamProjectId != null) && (googleProjectId != null) && (firstBucketName != null)) (mkIAMPolicyMember {
+            name = saName; namespace = namespace; teamProjectId = teamProjectId; googleProjectId = googleProjectId; bucketName = firstBucketName;
+          }));
       res = [ deployment ]
         ++ service
         ++ ingress
@@ -889,13 +1220,18 @@ rec {
         ++ serviceAccount
         ++ networkPolicy
         ++ accessNetworkPolicy
+        ++ tracingNetworkPolicy
         ++ aivenApplication
         ++ kafkaStream
         ++ valkeyResources
         ++ fqdnPolicy
         ++ serviceMonitor
         ++ secrets
-        ++ configMaps;
+        ++ configMaps
+        ++ gcpIam
+        ++ bqDatasets
+        ++ gcpBuckets
+        ++ frontendConfig;
     in {
       deployment = deployment;
       service = if service == [] then null else lib.head service;
@@ -908,7 +1244,7 @@ rec {
       accessNetworkPolicy = if accessNetworkPolicy == [] then null else lib.head accessNetworkPolicy;
       fqdnNetworkPolicy = if fqdnPolicy == [] then null else lib.head fqdnPolicy;
       serviceMonitor = if serviceMonitor == [] then null else lib.head serviceMonitor;
-      configMaps = configMaps;
+      configMaps = configMaps ++ frontendConfig;
       manifests = res;
       yaml = renderManifests res;
     };

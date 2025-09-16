@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations: {}
+  labels: {}
+  name: prom-annot-disabled
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prom-annot-disabled
+  strategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: prom-annot-disabled
+    spec:
+      containers:
+        - image: nginx:1.25
+          name: prom-annot-disabled
+          ports:
+            - containerPort: 11335
+              name: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  annotations: {}
+  labels: {}
+  name: prom-annot-disabled
+  namespace: default
+spec:
+  ports:
+    - name: http
+      port: 80
+      targetPort: 11335
+  selector:
+    app: prom-annot-disabled
+  type: ClusterIP

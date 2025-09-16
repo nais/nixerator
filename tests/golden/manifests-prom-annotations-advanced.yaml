@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations: {}
+  labels: {}
+  name: prom-annot-adv
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prom-annot-adv
+  strategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      annotations:
+        prometheus.io/path: /scrape/path
+        prometheus.io/port: "22222"
+        prometheus.io/scrape: "true"
+      labels:
+        app: prom-annot-adv
+    spec:
+      containers:
+        - image: nginx:1.25
+          name: prom-annot-adv
+          ports:
+            - containerPort: 11335
+              name: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  annotations: {}
+  labels: {}
+  name: prom-annot-adv
+  namespace: default
+spec:
+  ports:
+    - name: http
+      port: 80
+      targetPort: 11335
+  selector:
+    app: prom-annot-adv
+  type: ClusterIP

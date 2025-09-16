@@ -19,6 +19,15 @@ HPA_KAFKA_OUTPUT=${HPA_KAFKA_OUTPUT:-manifests-hpa-kafka}
 HPA_ADV_OUTPUT=${HPA_ADV_OUTPUT:-manifests-hpa-advanced}
 ING_GRPC_OUTPUT=${ING_GRPC_OUTPUT:-manifests-ingress-grpc}
 ING_REDIR_OUTPUT=${ING_REDIR_OUTPUT:-manifests-ingress-redirects}
+FRONTEND_OUTPUT=${FRONTEND_OUTPUT:-manifests-frontend}
+SECURELOGS_OUTPUT=${SECURELOGS_OUTPUT:-manifests-securelogs}
+VAULT_BASIC_OUTPUT=${VAULT_BASIC_OUTPUT:-manifests-vault-basic}
+VAULT_PATHS_OUTPUT=${VAULT_PATHS_OUTPUT:-manifests-vault-paths}
+GCP_BUCKETS_OUTPUT=${GCP_BUCKETS_OUTPUT:-manifests-gcp-buckets}
+GCP_BUCKETS_IAM_OUTPUT=${GCP_BUCKETS_IAM_OUTPUT:-manifests-gcp-buckets-iam}
+PROM_ANN_ADV_OUTPUT=${PROM_ANN_ADV_OUTPUT:-manifests-prom-annotations-advanced}
+PROM_ANN_BASIC_OUTPUT=${PROM_ANN_BASIC_OUTPUT:-manifests-prom-annotations-basic}
+PROM_ANN_DISABLED_OUTPUT=${PROM_ANN_DISABLED_OUTPUT:-manifests-prom-annotations-disabled}
 
 YQ=${YQ:-yq}
 
@@ -78,5 +87,14 @@ build_and_check "$HPA_KAFKA_OUTPUT" "${HPA_KAFKA_OUTPUT}.yaml"
 build_and_check "$HPA_ADV_OUTPUT" "${HPA_ADV_OUTPUT}.yaml"
 build_and_check "$ING_GRPC_OUTPUT" "${ING_GRPC_OUTPUT}.yaml"
 build_and_check "$ING_REDIR_OUTPUT" "${ING_REDIR_OUTPUT}.yaml"
+build_and_check "$FRONTEND_OUTPUT" "${FRONTEND_OUTPUT}.yaml"
+build_and_check "$SECURELOGS_OUTPUT" "${SECURELOGS_OUTPUT}.yaml"
+build_and_check "$VAULT_BASIC_OUTPUT" "${VAULT_BASIC_OUTPUT}.yaml"
+build_and_check "$VAULT_PATHS_OUTPUT" "${VAULT_PATHS_OUTPUT}.yaml"
+build_and_check "$GCP_BUCKETS_OUTPUT" "${GCP_BUCKETS_OUTPUT}.yaml"
+build_and_check "$GCP_BUCKETS_IAM_OUTPUT" "${GCP_BUCKETS_IAM_OUTPUT}.yaml"
+build_and_check "$PROM_ANN_ADV_OUTPUT" "${PROM_ANN_ADV_OUTPUT}.yaml"
+build_and_check "$PROM_ANN_BASIC_OUTPUT" "${PROM_ANN_BASIC_OUTPUT}.yaml"
+build_and_check "$PROM_ANN_DISABLED_OUTPUT" "${PROM_ANN_DISABLED_OUTPUT}.yaml"
 
 echo "All tests passed."

@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations: {}
+  labels: {}
+  name: gcp-buckets
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gcp-buckets
+  strategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: gcp-buckets
+    spec:
+      containers:
+        - image: nginx:1.25
+          name: gcp-buckets
+          ports:
+            - containerPort: 8080
+              name: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  annotations: {}
+  labels: {}
+  name: gcp-buckets
+  namespace: default
+spec:
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+  selector:
+    app: gcp-buckets
+  type: ClusterIP
+---
+apiVersion: storage.cnrm.cloud.google.com/v1beta1
+kind: StorageBucket
+metadata:
+  annotations:
+    cnrm.cloud.google.com/deletion-policy: abandon
+    cnrm.cloud.google.com/project-id: team-project-id
+  labels: {}
+  name: mybucket
+  namespace: default
+spec:
+  location: europe-north1
+  publicAccessPrevention: inherited

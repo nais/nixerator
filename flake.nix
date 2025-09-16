@@ -17,6 +17,11 @@
           baseModules = with self.nixosModules; [
             app
             appAiven
+            appVault
+            appGcpBuckets
+            appGcpBigQuery
+            appSecureLogs
+            appFrontend
             appPDB
             appServiceAccount
             appConfigMap
@@ -46,6 +51,11 @@
         nixosModules = {
           app = import ./modules/app.nix;
           appAiven = import ./modules/ext/aiven.nix;
+          appVault = import ./modules/ext/vault.nix;
+          appGcpBuckets = import ./modules/ext/gcp-buckets.nix;
+          appGcpBigQuery = import ./modules/ext/gcp-bigquery.nix;
+          appSecureLogs = import ./modules/ext/securelogs.nix;
+          appFrontend = import ./modules/ext/frontend.nix;
           appPDB = import ./modules/ext/pdb.nix;
           appServiceAccount = import ./modules/ext/serviceaccount.nix;
           appConfigMap = import ./modules/ext/configmap.nix;
@@ -117,6 +127,11 @@
             docModules = with self.nixosModules; [
               app
               appAiven
+              appVault
+              appGcpBuckets
+              appGcpBigQuery
+              appSecureLogs
+              appFrontend
               appPDB
               appServiceAccount
               appConfigMap
@@ -194,6 +209,65 @@
           packages.manifests-ingress-redirects = let
             eval = nlib.evalAppModules {
               modules = [ self.nixosModules.app (import ./examples/app-ingress-redirects.nix) ];
+              specialArgs = { inherit lib; };
+            };
+          in pkgs.writeText "manifest.yaml" eval.yaml;
+
+          packages.manifests-frontend = let
+            eval = nlib.evalAppModules {
+              modules = [ self.nixosModules.app self.nixosModules.appFrontend (import ./examples/app-frontend.nix) ];
+              specialArgs = { inherit lib; };
+            };
+          in pkgs.writeText "manifest.yaml" eval.yaml;
+
+          packages.manifests-securelogs = let
+            eval = nlib.evalAppModules {
+              modules = [ self.nixosModules.app self.nixosModules.appSecureLogs (import ./examples/app-securelogs.nix) ];
+              specialArgs = { inherit lib; };
+            };
+          in pkgs.writeText "manifest.yaml" eval.yaml;
+
+          packages.manifests-vault-basic = let
+            eval = nlib.evalAppModules {
+              modules = [ self.nixosModules.app self.nixosModules.appVault (import ./examples/app-vault-basic.nix) ];
+              specialArgs = { inherit lib; };
+            };
+          in pkgs.writeText "manifest.yaml" eval.yaml;
+
+          packages.manifests-vault-paths = let
+            eval = nlib.evalAppModules {
+              modules = [ self.nixosModules.app self.nixosModules.appVault (import ./examples/app-vault-paths.nix) ];
+              specialArgs = { inherit lib; };
+            };
+          in pkgs.writeText "manifest.yaml" eval.yaml;
+
+          packages.manifests-gcp-buckets = let
+            eval = nlib.evalAppModules {
+              modules = [ self.nixosModules.app self.nixosModules.appGcpBuckets (import ./examples/app-gcp-buckets.nix) ];
+              specialArgs = { inherit lib; };
+            };
+          in pkgs.writeText "manifest.yaml" eval.yaml;
+          packages.manifests-gcp-buckets-iam = let
+            eval = nlib.evalAppModules {
+              modules = [ self.nixosModules.app self.nixosModules.appGcpBuckets (import ./examples/app-gcp-buckets-iam.nix) ];
+              specialArgs = { inherit lib; };
+            };
+          in pkgs.writeText "manifest.yaml" eval.yaml;
+          packages.manifests-prom-annotations-advanced = let
+            eval = nlib.evalAppModules {
+              modules = [ self.nixosModules.app self.nixosModules.appPrometheus (import ./examples/app-prom-annotations-advanced.nix) ];
+              specialArgs = { inherit lib; };
+            };
+          in pkgs.writeText "manifest.yaml" eval.yaml;
+          packages.manifests-prom-annotations-basic = let
+            eval = nlib.evalAppModules {
+              modules = [ self.nixosModules.app self.nixosModules.appPrometheus (import ./examples/app-prom-annotations-basic.nix) ];
+              specialArgs = { inherit lib; };
+            };
+          in pkgs.writeText "manifest.yaml" eval.yaml;
+          packages.manifests-prom-annotations-disabled = let
+            eval = nlib.evalAppModules {
+              modules = [ self.nixosModules.app self.nixosModules.appPrometheus (import ./examples/app-prom-annotations-disabled.nix) ];
               specialArgs = { inherit lib; };
             };
           in pkgs.writeText "manifest.yaml" eval.yaml;
