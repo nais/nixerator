@@ -131,6 +131,7 @@ metadata:
 spec:
   AllowAllUsers: false
   Claims: {}
+  PreAuthorizedApplications: []
   ReplyUrls:
     - url: https://azure-sidecar.local/oauth2/callback
   SecretName: azure-azure-sidecar

@@ -51,5 +51,9 @@ metadata:
   name: tokenx
   namespace: default
 spec:
-  AccessPolicy: {}
+  AccessPolicy:
+    Inbound:
+      Rules: []
+    Outbound:
+      Rules: []
   SecretName: tokenx-tokenx

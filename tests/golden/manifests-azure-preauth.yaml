@@ -1,7 +1,8 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  annotations: {}
+  annotations:
+    azure.nais.io/preserve: "true"
   labels:
     azure: enabled
   name: azure-preauth
@@ -30,7 +31,8 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  annotations: {}
+  annotations:
+    azure.nais.io/preserve: "true"
   labels: {}
   name: azure-preauth
   namespace: default
@@ -46,7 +48,8 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  annotations: {}
+  annotations:
+    azure.nais.io/preserve: "true"
   labels: {}
   name: azure-preauth
   namespace: default
@@ -62,6 +65,37 @@ spec:
                   number: 80
             path: /
             pathType: Prefix
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  annotations:
+    azure.nais.io/preserve: "true"
+  labels: {}
+  name: azure-preauth-access
+  namespace: default
+spec:
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: default
+      ports: []
+    - from:
+        - podSelector:
+            matchLabels:
+              app: app1
+      ports: []
+    - from:
+        - podSelector:
+            matchLabels:
+              app: app2
+      ports: []
+  podSelector:
+    matchLabels:
+      app: azure-preauth
+  policyTypes:
+    - Ingress
 ---
 apiVersion: nais.io/v1
 kind: AzureAdApplication
@@ -86,4 +120,3 @@ spec:
     - url: https://azure-preauth.local/oauth2/callback
   SecretName: azure-azure-preauth
   SinglePageApplication: false
-

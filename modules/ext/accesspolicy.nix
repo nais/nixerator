@@ -11,6 +11,23 @@ in
     };
 
     inbound = {
+      rules = lib.mkOption {
+        type = types.listOf (types.submodule ({ ... }: { options = {
+          application = lib.mkOption { type = types.str; description = "Application allowed to call this app"; };
+          namespace = lib.mkOption { type = types.nullOr types.str; default = null; description = "Namespace of calling application (defaults to this app's namespace)."; };
+          cluster = lib.mkOption { type = types.nullOr types.str; default = null; description = "Cluster of calling application (defaults to app.clusterName)."; };
+          permissions = lib.mkOption {
+            type = types.submodule ({ ... }: { options = {
+              roles = lib.mkOption { type = types.listOf types.str; default = []; };
+              scopes = lib.mkOption { type = types.listOf types.str; default = []; };
+            }; });
+            default = { roles = []; scopes = []; };
+            description = "Optional permissions (roles/scopes) for the calling application.";
+          };
+        }; }));
+        default = [];
+        description = "Explicit inbound rules with optional namespace/cluster and permissions.";
+      };
       allowSameNamespace = lib.mkOption {
         type = types.bool;
         default = true;

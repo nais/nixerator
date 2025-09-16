@@ -74,6 +74,7 @@ metadata:
 spec:
   AllowAllUsers: false
   Claims: {}
+  PreAuthorizedApplications: []
   ReplyUrls:
     - url: https://azure-app.local/oauth2/callback
   SecretName: azure-azure-app

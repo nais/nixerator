@@ -1561,9 +1561,22 @@ export default {
       # Copy only azure.nais.io/* annotations onto AzureAdApplication
       hasPrefix = pref: s: lib.substring 0 (lib.stringLength pref) s == pref;
       azureAnnotations = lib.filterAttrs (n: _: hasPrefix "azure.nais.io/" n) annotations;
-      # PreAuthorizedApplications from accessPolicy inbound.allowedApps
-      preAuthApps = let apps = (apCfg.inbound or {}).allowedApps or []; in
-        map (appName: { Application = appName; Namespace = namespace; Cluster = clusterName; }) apps;
+      # PreAuthorizedApplications from accessPolicy inbound.rules (fallback to allowedApps)
+      inb = apCfg.inbound or {};
+      ruleItems = inb.rules or [];
+      preAuthFromRules = map (r: ({
+        Application = r.application;
+        Namespace = if (r.namespace or null) == null then namespace else r.namespace;
+        Cluster = if (r.cluster or null) == null then clusterName else r.cluster;
+      }
+        // (let perms = r.permissions or { roles = []; scopes = []; }; in
+            lib.optionalAttrs ((perms.roles or []) != [] || (perms.scopes or []) != []) {
+              Permissions = {} // (lib.optionalAttrs ((perms.roles or []) != []) { Roles = perms.roles; })
+                               // (lib.optionalAttrs ((perms.scopes or []) != []) { Scopes = perms.scopes; });
+            })
+      )) ruleItems;
+      preAuthFromApps = map (appName: { Application = appName; Namespace = namespace; Cluster = clusterName; }) (inb.allowedApps or []);
+      preAuthApps = if preAuthFromRules != [] then preAuthFromRules else preAuthFromApps;
       azureApplication =
         let app = azureCfg.application or { enabled = false; }; in
         lib.optional ((app.enabled or false) || (azureCfg.sidecar.enabled or false)) (
@@ -1663,8 +1676,15 @@ export default {
         ++ azureApplication
         ++ idportenClient
         ++ (lib.optional (tokenxCfg.enable or false) (
-          let inboundApps = (apCfg.inbound or {}).allowedApps or [];
-              rules = map (appName: { Application = appName; Namespace = namespace; Cluster = clusterName; }) inboundApps;
+          let inb2 = apCfg.inbound or {};
+              rulesSrc = (inb2.rules or []);
+              rulesNorm = map (r: {
+                Application = r.application;
+                Namespace = if (r.namespace or null) == null then namespace else r.namespace;
+                Cluster = if (r.cluster or null) == null then clusterName else r.cluster;
+              }) rulesSrc;
+              rulesApps = map (appName: { Application = appName; Namespace = namespace; Cluster = clusterName; }) (inb2.allowedApps or []);
+              rules = if rulesNorm != [] then rulesNorm else rulesApps;
               access = { Inbound = { Rules = rules; }; Outbound = { Rules = []; }; };
           in mkJwker { inherit name namespace; labels = labelsWithAuth; annotations = annotations; accessPolicy = access; secretName = "tokenx-" + name; }
         ))

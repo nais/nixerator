@@ -34,6 +34,7 @@ INTEGRATIONS_STUBS_OUTPUT=${INTEGRATIONS_STUBS_OUTPUT:-manifests-integrations-st
 LEADER_ELECTION_OUTPUT=${LEADER_ELECTION_OUTPUT:-manifests-leader-election}
 AZURE_APP_OUTPUT=${AZURE_APP_OUTPUT:-manifests-azure-application}
 AZURE_SIDECAR_OUTPUT=${AZURE_SIDECAR_OUTPUT:-manifests-azure-sidecar}
+AZURE_PREAUTH_OUTPUT=${AZURE_PREAUTH_OUTPUT:-manifests-azure-preauth}
 IDPORTEN_OUTPUT=${IDPORTEN_OUTPUT:-manifests-idporten}
 TOKENX_OUTPUT=${TOKENX_OUTPUT:-manifests-tokenx}
 TOKENX_ACCESS_OUTPUT=${TOKENX_ACCESS_OUTPUT:-manifests-tokenx-access}
@@ -114,6 +115,7 @@ build_and_check "$INTEGRATIONS_STUBS_OUTPUT" "${INTEGRATIONS_STUBS_OUTPUT}.yaml"
 build_and_check "$LEADER_ELECTION_OUTPUT" "${LEADER_ELECTION_OUTPUT}.yaml"
 build_and_check "$AZURE_APP_OUTPUT" "${AZURE_APP_OUTPUT}.yaml"
 build_and_check "$AZURE_SIDECAR_OUTPUT" "${AZURE_SIDECAR_OUTPUT}.yaml"
+build_and_check "$AZURE_PREAUTH_OUTPUT" "${AZURE_PREAUTH_OUTPUT}.yaml"
 build_and_check "$IDPORTEN_OUTPUT" "${IDPORTEN_OUTPUT}.yaml"
 build_and_check "$TOKENX_OUTPUT" "${TOKENX_OUTPUT}.yaml"
 build_and_check "$TOKENX_ACCESS_OUTPUT" "${TOKENX_ACCESS_OUTPUT}.yaml"
