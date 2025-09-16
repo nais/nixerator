@@ -13,7 +13,8 @@ MANIFEST_MODULE := manifests-module.yaml
 DOC := nixerator-options.org
 
 .PHONY: help all build print build-module print-module show fmt check dev \
-        manifests manifests-module apply apply-result docs print-docs clean
+        manifests manifests-module apply apply-result docs print-docs \
+        test update-golden kubeconform clean
 
 help: ## Show this help.
 	@awk 'BEGIN {FS = ":.*##"; printf "Available targets\n-----------------\n"} /^[a-zA-Z0-9_.-]+:.*?##/ { printf "  %-24s %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
@@ -74,3 +75,14 @@ print-docs: ## Print the generated Org docs.
 
 clean: ## Remove build artifacts and generated files.
 	rm -f $(RESULT) $(MANIFEST) $(MANIFEST_MODULE) $(DOC)
+
+test: ## Run golden tests and kubeconform (requires nix and yq; kubeconform optional).
+	bash tests/run.sh
+
+update-golden: ## Rebuild and update goldens (OUTPUT/MODULE_OUTPUT configurable).
+	UPDATE_GOLDEN=1 bash tests/run.sh
+
+kubeconform: ## Validate manifests with kubeconform (reads ./result or builds first).
+	@if [ ! -e $(RESULT) ]; then nix build $(FLAKE)#$(OUTPUT); fi
+	@command -v kubeconform >/dev/null 2>&1 || { echo "kubeconform not found in PATH"; exit 1; }
+	kubeconform -strict -ignore-missing-schemas -summary -output pretty -exit-on-error - < $(RESULT)

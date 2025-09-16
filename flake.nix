@@ -52,9 +52,23 @@
             buildInputs = [
               pkgs.nixpkgs-fmt
               pkgs.yq-go
+              pkgs.kubeconform
             ];
           };
 
           formatter = pkgs.nixpkgs-fmt;
+
+          # Add a simple golden check comparing manifests-basic to golden file
+          checks.golden-basic = pkgs.runCommand "golden-basic" {
+            buildInputs = [ pkgs.yq-go pkgs.diffutils ];
+            src = self.packages.${system}.manifests-basic;
+            golden = ./tests/golden/manifests-basic.yaml;
+          } ''
+            set -euo pipefail
+            yq -P -S < "$src" > built.yaml
+            yq -P -S < "$golden" > golden.yaml || true
+            diff -u golden.yaml built.yaml || { echo "Golden mismatch"; exit 1; }
+            cp built.yaml "$out"
+          '';
         });
 }
