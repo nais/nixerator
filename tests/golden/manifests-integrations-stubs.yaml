@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations: {}
+  labels: {}
+  name: integrations
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: integrations
+  strategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: integrations
+    spec:
+      containers:
+        - env:
+            - name: WONDERWALL_ENABLED
+              value: "true"
+            - name: AZURE_ENABLED
+              value: "true"
+            - name: AZURE_CLIENT_ID
+              value: 00000000-0000-0000-0000-000000000000
+            - name: TEXAS_ENABLED
+              value: "true"
+            - name: TOKEN_X_ENABLED
+              value: "true"
+            - name: TOKEN_X_CLIENT_ID
+              value: cluster:namespace:integrations
+            - name: MASKINPORTEN_ENABLED
+              value: "true"
+            - name: MASKINPORTEN_CLIENT_ID
+              value: maskin-client
+          image: nginx:1.25
+          name: integrations
+          ports:
+            - containerPort: 8080
+              name: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  annotations: {}
+  labels: {}
+  name: integrations
+  namespace: default
+spec:
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+  selector:
+    app: integrations
+  type: ClusterIP
+

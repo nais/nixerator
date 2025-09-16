@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations: {}
+  labels:
+    leader-election: enabled
+  name: leader
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: leader
+  strategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: leader
+        leader-election: enabled
+    spec:
+      containers:
+        - env:
+            - name: LEADER_ELECTION_ENABLED
+              value: "true"
+          image: nginx:1.25
+          name: leader
+          ports:
+            - containerPort: 8080
+              name: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  annotations: {}
+  name: leader
+  namespace: default
+spec:
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+  selector:
+    app: leader
+  type: ClusterIP

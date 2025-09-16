@@ -1,0 +1,87 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations: {}
+  labels: {}
+  name: gcp-cloudsql
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gcp-cloudsql
+  strategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: gcp-cloudsql
+    spec:
+      containers:
+        - image: nginx:1.25
+          name: gcp-cloudsql
+          ports:
+            - containerPort: 8080
+              name: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  annotations: {}
+  labels: {}
+  name: gcp-cloudsql
+  namespace: default
+spec:
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+  selector:
+    app: gcp-cloudsql
+  type: ClusterIP
+---
+apiVersion: sql.cnrm.cloud.google.com/v1beta1
+kind: SQLInstance
+metadata:
+  annotations:
+    cnrm.cloud.google.com/deletion-policy: abandon
+    cnrm.cloud.google.com/project-id: team-project-id
+  labels: {}
+  name: db1
+  namespace: default
+spec:
+  databaseVersion: POSTGRES_14
+  region: europe-north1
+  settings:
+    tier: db-f1-micro
+---
+apiVersion: sql.cnrm.cloud.google.com/v1beta1
+kind: SQLDatabase
+metadata:
+  annotations:
+    cnrm.cloud.google.com/project-id: team-project-id
+  labels: {}
+  name: appdb
+  namespace: default
+spec:
+  instanceRef:
+    name: db1
+---
+apiVersion: sql.cnrm.cloud.google.com/v1beta1
+kind: SQLUser
+metadata:
+  annotations:
+    cnrm.cloud.google.com/project-id: team-project-id
+  labels: {}
+  name: app
+  namespace: default
+spec:
+  instanceRef:
+    name: db1
+  password:
+    valueFrom:
+      secretKeyRef:
+        key: password
+        name: sql-user-app
+  type: BUILT_IN
+

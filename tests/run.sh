@@ -28,6 +28,12 @@ GCP_BUCKETS_IAM_OUTPUT=${GCP_BUCKETS_IAM_OUTPUT:-manifests-gcp-buckets-iam}
 PROM_ANN_ADV_OUTPUT=${PROM_ANN_ADV_OUTPUT:-manifests-prom-annotations-advanced}
 PROM_ANN_BASIC_OUTPUT=${PROM_ANN_BASIC_OUTPUT:-manifests-prom-annotations-basic}
 PROM_ANN_DISABLED_OUTPUT=${PROM_ANN_DISABLED_OUTPUT:-manifests-prom-annotations-disabled}
+GCP_CLOUDSQL_OUTPUT=${GCP_CLOUDSQL_OUTPUT:-manifests-gcp-cloudsql}
+WEBPROXY_OUTPUT=${WEBPROXY_OUTPUT:-manifests-webproxy}
+INTEGRATIONS_STUBS_OUTPUT=${INTEGRATIONS_STUBS_OUTPUT:-manifests-integrations-stubs}
+LEADER_ELECTION_OUTPUT=${LEADER_ELECTION_OUTPUT:-manifests-leader-election}
+AZURE_APP_OUTPUT=${AZURE_APP_OUTPUT:-manifests-azure-application}
+AZURE_SIDECAR_OUTPUT=${AZURE_SIDECAR_OUTPUT:-manifests-azure-sidecar}
 
 YQ=${YQ:-yq}
 
@@ -96,5 +102,11 @@ build_and_check "$GCP_BUCKETS_IAM_OUTPUT" "${GCP_BUCKETS_IAM_OUTPUT}.yaml"
 build_and_check "$PROM_ANN_ADV_OUTPUT" "${PROM_ANN_ADV_OUTPUT}.yaml"
 build_and_check "$PROM_ANN_BASIC_OUTPUT" "${PROM_ANN_BASIC_OUTPUT}.yaml"
 build_and_check "$PROM_ANN_DISABLED_OUTPUT" "${PROM_ANN_DISABLED_OUTPUT}.yaml"
+build_and_check "$GCP_CLOUDSQL_OUTPUT" "${GCP_CLOUDSQL_OUTPUT}.yaml"
+build_and_check "$WEBPROXY_OUTPUT" "${WEBPROXY_OUTPUT}.yaml"
+build_and_check "$INTEGRATIONS_STUBS_OUTPUT" "${INTEGRATIONS_STUBS_OUTPUT}.yaml"
+build_and_check "$LEADER_ELECTION_OUTPUT" "${LEADER_ELECTION_OUTPUT}.yaml"
+build_and_check "$AZURE_APP_OUTPUT" "${AZURE_APP_OUTPUT}.yaml"
+build_and_check "$AZURE_SIDECAR_OUTPUT" "${AZURE_SIDECAR_OUTPUT}.yaml"
 
 echo "All tests passed."

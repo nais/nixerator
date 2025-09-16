@@ -1,0 +1,81 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations: {}
+  labels:
+    azure: enabled
+  name: azure-app
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: azure-app
+  strategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: azure-app
+        azure: enabled
+    spec:
+      containers:
+        - image: nginx:1.25
+          name: azure-app
+          ports:
+            - containerPort: 8080
+              name: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  annotations: {}
+  labels: {}
+  name: azure-app
+  namespace: default
+spec:
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+  selector:
+    app: azure-app
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations: {}
+  labels: {}
+  name: azure-app
+  namespace: default
+spec:
+  rules:
+    - host: azure-app.local
+      http:
+        paths:
+          - backend:
+              service:
+                name: azure-app
+                port:
+                  number: 80
+            path: /
+            pathType: Prefix
+---
+apiVersion: nais.io/v1
+kind: AzureAdApplication
+metadata:
+  annotations: {}
+  labels:
+    azure: enabled
+  name: azure-app
+  namespace: default
+spec:
+  AllowAllUsers: false
+  Claims: {}
+  ReplyUrls:
+    - url: https://azure-app.local/oauth2/callback
+  SecretName: azure-azure-app
+  SinglePageApplication: false
+  Tenant: nav.no
+

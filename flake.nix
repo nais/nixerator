@@ -19,7 +19,9 @@
             appAiven
             appVault
             appGcpBuckets
+            appGcpCloudSQL
             appGcpBigQuery
+            appAzure
             appSecureLogs
             appFrontend
             appPDB
@@ -32,6 +34,9 @@
             appPodSecurity
             appObservability
             appDefaultEnv
+            appWebproxy
+            appLeaderElection
+            appIntegrations
             appReloader
             appTTL
             appLabelsDefaults
@@ -53,7 +58,9 @@
           appAiven = import ./modules/ext/aiven.nix;
           appVault = import ./modules/ext/vault.nix;
           appGcpBuckets = import ./modules/ext/gcp-buckets.nix;
+          appGcpCloudSQL = import ./modules/ext/gcp-cloudsql.nix;
           appGcpBigQuery = import ./modules/ext/gcp-bigquery.nix;
+          appAzure = import ./modules/ext/azure.nix;
           appSecureLogs = import ./modules/ext/securelogs.nix;
           appFrontend = import ./modules/ext/frontend.nix;
           appPDB = import ./modules/ext/pdb.nix;
@@ -66,6 +73,9 @@
           appPodSecurity = import ./modules/ext/podsecurity.nix;
           appObservability = import ./modules/ext/observability.nix;
           appDefaultEnv = import ./modules/ext/defaultenv.nix;
+          appWebproxy = import ./modules/ext/webproxy.nix;
+          appLeaderElection = import ./modules/ext/leaderelection.nix;
+          appIntegrations = import ./modules/ext/integrations.nix;
           appReloader = import ./modules/ext/reloader.nix;
           appTTL = import ./modules/ext/ttl.nix;
           appLabelsDefaults = import ./modules/ext/labels-defaults.nix;
@@ -129,7 +139,9 @@
               appAiven
               appVault
               appGcpBuckets
+              appGcpCloudSQL
               appGcpBigQuery
+              appAzure
               appSecureLogs
               appFrontend
               appPDB
@@ -142,6 +154,9 @@
               appPodSecurity
               appObservability
               appDefaultEnv
+              appWebproxy
+              appLeaderElection
+              appIntegrations
               appReloader
               appTTL
               appLabelsDefaults
@@ -165,6 +180,22 @@
           packages.manifests-aiven = let
             eval = nlib.evalAppModules {
               modules = [ self.nixosModules.app self.nixosModules.appAiven (import ./examples/app-aiven.nix) ];
+              specialArgs = { inherit lib; };
+            };
+          in pkgs.writeText "manifest.yaml" eval.yaml;
+
+          # Azure application example
+          packages.manifests-azure-application = let
+            eval = nlib.evalAppModules {
+              modules = [ self.nixosModules.app self.nixosModules.appAzure (import ./examples/app-azure-application.nix) ];
+              specialArgs = { inherit lib; };
+            };
+          in pkgs.writeText "manifest.yaml" eval.yaml;
+
+          # Azure sidecar (wonderwall) example
+          packages.manifests-azure-sidecar = let
+            eval = nlib.evalAppModules {
+              modules = [ self.nixosModules.app self.nixosModules.appAzure (import ./examples/app-azure-sidecar.nix) ];
               specialArgs = { inherit lib; };
             };
           in pkgs.writeText "manifest.yaml" eval.yaml;
@@ -253,6 +284,38 @@
               specialArgs = { inherit lib; };
             };
           in pkgs.writeText "manifest.yaml" eval.yaml;
+          # GCP CloudSQL example
+          packages.manifests-gcp-cloudsql = let
+            eval = nlib.evalAppModules {
+              modules = [ self.nixosModules.app self.nixosModules.appGcpCloudSQL (import ./examples/app-gcp-cloudsql.nix) ];
+              specialArgs = { inherit lib; };
+            };
+          in pkgs.writeText "manifest.yaml" eval.yaml;
+
+          # Webproxy example
+          packages.manifests-webproxy = let
+            eval = nlib.evalAppModules {
+              modules = [ self.nixosModules.app self.nixosModules.appWebproxy (import ./examples/app-webproxy.nix) ];
+              specialArgs = { inherit lib; };
+            };
+          in pkgs.writeText "manifest.yaml" eval.yaml;
+
+          # Integrations stubs example
+          packages.manifests-integrations-stubs = let
+            eval = nlib.evalAppModules {
+              modules = [ self.nixosModules.app self.nixosModules.appIntegrations (import ./examples/app-integrations-stubs.nix) ];
+              specialArgs = { inherit lib; };
+            };
+          in pkgs.writeText "manifest.yaml" eval.yaml;
+
+          # Leader election example
+          packages.manifests-leader-election = let
+            eval = nlib.evalAppModules {
+              modules = [ self.nixosModules.app self.nixosModules.appLeaderElection (import ./examples/app-leader-election.nix) ];
+              specialArgs = { inherit lib; };
+            };
+          in pkgs.writeText "manifest.yaml" eval.yaml;
+
           packages.manifests-prom-annotations-advanced = let
             eval = nlib.evalAppModules {
               modules = [ self.nixosModules.app self.nixosModules.appPrometheus (import ./examples/app-prom-annotations-advanced.nix) ];

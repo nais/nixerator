@@ -308,6 +308,122 @@ rec {
       };
     };
 
+  # AzureAdApplication (nais.io/v1)
+  mkAzureAdApplication = {
+    name,
+    namespace ? "default",
+    replyUrls ? [],
+    tenant ? null,
+    secretName ? null,
+    claims ? {},
+    singlePageApplication ? false,
+    allowAllUsers ? false,
+    labels ? {},
+    annotations ? {}
+  }:
+    ({
+      apiVersion = "nais.io/v1";
+      kind = "AzureAdApplication";
+      metadata = { inherit name namespace labels annotations; };
+      spec = ({
+        ReplyUrls = map (u: { url = u; }) replyUrls;
+        SecretName = if secretName == null then "azure-" + name else secretName;
+        Claims = claims;
+        SinglePageApplication = singlePageApplication;
+        AllowAllUsers = allowAllUsers;
+      }
+      // (lib.optionalAttrs (tenant != null) { Tenant = tenant; }));
+    });
+
+  # Cloud SQL (CNRM) resources
+  mkSQLInstance = {
+    name,
+    namespace,
+    projectId,
+    databaseVersion,
+    region ? "europe-north1",
+    tier ? "db-f1-micro",
+    deletionPolicy ? "abandon",
+    labels ? {},
+    annotations ? {}
+  }:
+    {
+      apiVersion = "sql.cnrm.cloud.google.com/v1beta1";
+      kind = "SQLInstance";
+      metadata = {
+        inherit name namespace;
+        labels = labels;
+        annotations = annotations // {
+          "cnrm.cloud.google.com/project-id" = projectId;
+          "cnrm.cloud.google.com/deletion-policy" = deletionPolicy;
+        };
+      };
+      spec = {
+        inherit databaseVersion region;
+        settings = { inherit tier; };
+      };
+    };
+
+  mkSQLDatabase = {
+    name,
+    namespace,
+    projectId,
+    instanceRefName,
+    charset ? null,
+    collation ? null,
+    labels ? {},
+    annotations ? {}
+  }:
+    ({
+      apiVersion = "sql.cnrm.cloud.google.com/v1beta1";
+      kind = "SQLDatabase";
+      metadata = {
+        inherit name namespace;
+        labels = labels;
+        annotations = annotations // {
+          "cnrm.cloud.google.com/project-id" = projectId;
+        };
+      };
+      spec = {
+        instanceRef = { name = instanceRefName; };
+      };
+    }
+    // (lib.optionalAttrs (charset != null) { spec.charset = charset; })
+    // (lib.optionalAttrs (collation != null) { spec.collation = collation; }));
+
+  mkSQLUser = {
+    name,
+    namespace,
+    projectId,
+    instanceRefName,
+    passwordSecretName ? null,
+    passwordSecretKey ? "password",
+    type ? "BUILT_IN",
+    host ? null,
+    labels ? {},
+    annotations ? {}
+  }:
+    let pw = if passwordSecretName == null then null else {
+      valueFrom.secretKeyRef = { name = passwordSecretName; key = passwordSecretKey; };
+    }; in
+    ({
+      apiVersion = "sql.cnrm.cloud.google.com/v1beta1";
+      kind = "SQLUser";
+      metadata = {
+        inherit name namespace;
+        labels = labels;
+        annotations = annotations // {
+          "cnrm.cloud.google.com/project-id" = projectId;
+        };
+      };
+      spec = {
+        inherit type;
+        instanceRef = { name = instanceRefName; };
+      };
+    }
+    // (lib.optionalAttrs (pw != null) { spec.password = pw; })
+    // (lib.optionalAttrs (host != null) { spec.host = host; }));
+
   # GCP Config Connector (CNRM) resources (minimal)
   mkStorageBucket = {
     name,
@@ -515,7 +631,12 @@ rec {
       feCfg = cfg.frontend or {};
       slCfg = cfg.securelogs or { enable = false; };
       gcpCfg = cfg.gcp or {};
+      cloudSqlCfg = (gcpCfg.cloudSql or { instances = []; databases = []; users = []; });
+      wpCfg = cfg.webproxy or { enable = false; };
+      leCfg = cfg.leaderElection or { enable = false; };
+      ints = cfg.integrations or {};
       vaultCfg = cfg.vault or { enable = false; };
+      azureCfg = cfg.azure or { application = { enabled = false; }; sidecar = { enabled = false; }; };
       npCfg = cfg.networkPolicy or { enable = false; };
       apCfg = cfg.accessPolicy or { enable = false; };
       fqdnCfg = cfg.fqdnPolicy or { enable = false; rules = []; };
@@ -701,6 +822,27 @@ rec {
       envBase = (ensureEnv cfg.env);
       envNoOtel = lib.filter (e: (e.name or "") != "OTEL_RESOURCE_ATTRIBUTES") envBase;
       envFinal = envNoOtel ++ baseEnv ++ gcpEnv ++ mkOtelEnv;
+      # Webproxy env
+      webproxyEnv = if (wpCfg.enable or false) then (
+        let http = (wpCfg.httpProxy or "http://webproxy:8088"); https = (wpCfg.httpsProxy or http); in
+        [ { name = "HTTP_PROXY"; value = http; }
+          { name = "HTTPS_PROXY"; value = https; }
+        ] ++ (let np = wpCfg.noProxy or []; in lib.optional (np != []) { name = "NO_PROXY"; value = lib.concatStringsSep "," np; })
+      ) else [];
+      # Integrations stubs: env only
+      integrationsEnv = []
+        ++ (lib.optional (ints.wonderwall or { enabled = false; }).enabled { name = "WONDERWALL_ENABLED"; value = "true"; })
+        ++ (let a = ints.azure or { enabled = false; }; in []
+          ++ (lib.optional (a.enabled or false) { name = "AZURE_ENABLED"; value = "true"; })
+          ++ (lib.optional ((a.clientId or null) != null) { name = "AZURE_CLIENT_ID"; value = a.clientId; }))
+        ++ (let t = ints.texas or { enabled = false; }; in lib.optional (t.enabled or false) { name = "TEXAS_ENABLED"; value = "true"; })
+        ++ (let tx = ints.tokenx or { enabled = false; }; in []
+          ++ (lib.optional (tx.enabled or false) { name = "TOKEN_X_ENABLED"; value = "true"; })
+          ++ (lib.optional ((tx.clientId or null) != null) { name = "TOKEN_X_CLIENT_ID"; value = tx.clientId; }))
+        ++ (let m = ints.maskinporten or { enabled = false; }; in []
+          ++ (lib.optional (m.enabled or false) { name = "MASKINPORTEN_ENABLED"; value = "true"; })
+          ++ (lib.optional ((m.clientId or null) != null) { name = "MASKINPORTEN_CLIENT_ID"; value = m.clientId; }));
+      leaderEnv = lib.optional (leCfg.enable or false) { name = "LEADER_ELECTION_ENABLED"; value = "true"; };
       # Aiven secret/env/volumes injection
       sanitizeInst = s:
         lib.toUpper (lib.replaceStrings ["-" "." ":" "/" " "] ["_" "_" "_" "_" "_"] s);
@@ -757,6 +899,11 @@ rec {
       # Optional aiven label when any aiven integration is configured
       anyAiven = aivenEnabled && ((aivenKafka != null) || (aivenOpenSearch != null) || (aivenValkey != []));
       labelsWithAiven = labelsWithTeam // (lib.optionalAttrs anyAiven { aiven = "enabled"; });
+      # Auth labels when Azure/Wonderwall is enabled
+      labelsWithAuth = labelsWithAiven
+        // (lib.optionalAttrs ((azureCfg.application.enabled or false) || (azureCfg.sidecar.enabled or false)) { azure = "enabled"; })
+        // (lib.optionalAttrs (azureCfg.sidecar.enabled or false) { wonderwall = "enabled"; })
+        // (lib.optionalAttrs (azureCfg.sidecar.enabled or false) { otel = "enabled"; });
 
       # Secure logs: labels, volumes, initContainer, mounts
       secureLogsEnabled = slCfg.enable or false;
@@ -812,14 +959,60 @@ rec {
         }
       ] else [];
 
+      # Wonderwall sidecar (initContainer)
+      wwInit = let sc = azureCfg.sidecar or { enabled = false; }; in
+        if (sc.enabled or false) then [
+          {
+            name = "wonderwall";
+            image = sc.image or "ghcr.io/nais/wonderwall:latest";
+            imagePullPolicy = "IfNotPresent";
+            env = (
+              let
+                ing = ingressCfg;
+                scheme = "https://";
+                ingressUrl = if (ing.enable or false) && (ing.host or null) != null then "${scheme}${ing.host}" else "";
+                portStr = toString serviceCfg.targetPort;
+                autoIgnored = lib.concatStringsSep "," (sc.autoLoginIgnorePaths or []);
+              in [
+                { name = "WONDERWALL_OPENID_PROVIDER"; value = "azure"; }
+                { name = "WONDERWALL_INGRESS"; value = ingressUrl; }
+                { name = "WONDERWALL_UPSTREAM_IP"; valueFrom.fieldRef.fieldPath = "status.podIP"; }
+                { name = "WONDERWALL_UPSTREAM_PORT"; value = portStr; }
+                { name = "WONDERWALL_BIND_ADDRESS"; value = "0.0.0.0:7564"; }
+                { name = "WONDERWALL_METRICS_BIND_ADDRESS"; value = "0.0.0.0:7565"; }
+                { name = "WONDERWALL_PROBE_BIND_ADDRESS"; value = "0.0.0.0:7566"; }
+              ]
+              ++ (lib.optional (sc.autoLogin or false) { name = "WONDERWALL_AUTO_LOGIN"; value = "true"; })
+              ++ (lib.optional (sc.autoLogin or false && autoIgnored != "") { name = "WONDERWALL_AUTO_LOGIN_IGNORE_PATHS"; value = autoIgnored; })
+            );
+            envFrom = [
+              { secretRef = { name = "azure-" + name; }; }
+              { secretRef = { name = "wonderwall-azure-config"; }; }
+            ];
+            ports = [
+              { containerPort = 7564; protocol = "TCP"; name = "wonderwall"; }
+              { containerPort = 7565; protocol = "TCP"; name = "ww-metrics"; }
+              { containerPort = 7566; protocol = "TCP"; name = "ww-probe"; }
+            ];
+            securityContext = {
+              allowPrivilegeEscalation = false;
+              readOnlyRootFilesystem = true;
+              runAsNonRoot = true;
+              capabilities.drop = [ "ALL" ];
+              seccompProfile.type = "RuntimeDefault";
+            };
+          }
+        ] else [];
+
       deployment = mkDeployment {
         name = name;
         namespace = namespace;
-        labels = labelsWithAiven // secureLogsLabel // logLabels // ttlLabel;
+        labels = labelsWithAuth // secureLogsLabel // logLabels // ttlLabel
+          // (lib.optionalAttrs (leCfg.enable or false) { "leader-election" = "enabled"; });
         annotations = annotations // reloaderAnn // ttlAnn;
         image = cfg.image;
         replicas = cfg.replicas;
-        env = envFinal ++ aivenEnv
+        env = envFinal ++ webproxyEnv ++ integrationsEnv ++ leaderEnv ++ aivenEnv
           ++ (let turl = (feCfg.telemetryUrl or null); in lib.optional (turl != null) { name = "NAIS_FRONTEND_TELEMETRY_COLLECTOR_URL"; value = turl; });
         command = cfg.command or [];
         ports = let
@@ -843,7 +1036,7 @@ rec {
               { key = "client.truststore.jks"; path = "client.truststore.jks"; }
             ]; }; } ] else [])
           ++ (let gen = feCfg.generatedConfig or null; in lib.optional (gen != null && (feCfg.telemetryUrl or null) != null) { name = "frontend-config"; configMap = { name = "${name}-frontend-config"; }; });
-        initContainers = secureLogsInitContainers
+        initContainers = secureLogsInitContainers ++ wwInit
           ++ (let v = vaultCfg; in
             if (v.enable or false) && (v.address or null) != null && (v.kvBasePath or null) != null && (v.authPath or null) != null then
               [
@@ -922,7 +1115,8 @@ rec {
                 u2 = lib.removePrefix "http://" u1;
             in lib.elemAt (lib.splitString "/" u2) 0;
         in lib.concatMap (r:
-          let host = stripScheme r.from; target = r.to; in [
+          let from = r.from or ""; to = r.to or ""; host = if from == "" then "" else stripScheme from; target = to; in
+          if from == "" || to == "" || host == "" || from == to then [] else [
             {
               apiVersion = "networking.k8s.io/v1";
               kind = "Ingress";
@@ -1162,6 +1356,62 @@ export default {
           annotations = annotations;
         }) ] else []
       ) (gcpCfg.buckets or []);
+      # GCP Cloud SQL
+      gcpCloudSql =
+        let projectId = gcpCfg.projectId or null; in
+        if projectId == null then [] else
+        []
+        ++ (lib.concatMap (i: [ (mkSQLInstance {
+              name = i.name;
+              namespace = namespace;
+              inherit projectId;
+              databaseVersion = i.databaseVersion;
+              region = i.region or "europe-north1";
+              tier = i.tier or "db-f1-micro";
+              deletionPolicy = i.deletionPolicy or "abandon";
+              labels = labelsWithTeam;
+              annotations = annotations;
+            }) ]) (cloudSqlCfg.instances or []))
+        ++ (lib.concatMap (d: [ (mkSQLDatabase {
+              name = d.name;
+              namespace = namespace;
+              inherit projectId;
+              instanceRefName = d.instance;
+              charset = d.charset or null;
+              collation = d.collation or null;
+              labels = labelsWithTeam;
+              annotations = annotations;
+            }) ]) (cloudSqlCfg.databases or []))
+        ++ (lib.concatMap (u: [ (mkSQLUser {
+              name = u.name;
+              namespace = namespace;
+              inherit projectId;
+              instanceRefName = u.instance;
+              passwordSecretName = u.passwordSecretName or null;
+              passwordSecretKey = u.passwordSecretKey or "password";
+              type = u.type or "BUILT_IN";
+              host = u.host or null;
+              labels = labelsWithTeam;
+              annotations = annotations;
+            }) ]) (cloudSqlCfg.users or []));
+      # Azure AD Application
+      azureApplication =
+        let app = azureCfg.application or { enabled = false; }; in
+        lib.optional ((app.enabled or false) || (azureCfg.sidecar.enabled or false)) (
+          mkAzureAdApplication {
+            inherit name namespace;
+            labels = labelsWithAuth;
+            annotations = annotations;
+            replyUrls = let urls = app.replyURLs or []; in
+              if urls != [] then urls else (
+                if (ingressCfg.enable or false) && (ingressCfg.host or null) != null
+                then [ "https://${ingressCfg.host}/oauth2/callback" ] else []);
+            tenant = app.tenant or null;
+            claims = app.claims or {};
+            singlePageApplication = if (azureCfg.sidecar.enabled or false) then false else (app.singlePageApplication or false);
+            allowAllUsers = app.allowAllUsers or false;
+          }
+        );
       # GCP BigQuery datasets (NAIS CRD) + Project IAM jobUser binding
       bqDatasets = lib.concatMap (d:
         let
@@ -1231,6 +1481,8 @@ export default {
         ++ gcpIam
         ++ bqDatasets
         ++ gcpBuckets
+        ++ gcpCloudSql
+        ++ azureApplication
         ++ frontendConfig;
     in {
       deployment = deployment;

@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations: {}
+  labels: {}
+  name: webproxy
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: webproxy
+  strategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: webproxy
+    spec:
+      containers:
+        - env:
+            - name: HTTP_PROXY
+              value: http://proxy.nav.no:8088
+            - name: HTTPS_PROXY
+              value: http://proxy.nav.no:8088
+            - name: NO_PROXY
+              value: localhost,.local
+          image: nginx:1.25
+          name: webproxy
+          ports:
+            - containerPort: 8080
+              name: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  annotations: {}
+  labels: {}
+  name: webproxy
+  namespace: default
+spec:
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+  selector:
+    app: webproxy
+  type: ClusterIP
+
