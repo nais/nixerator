@@ -23,8 +23,16 @@ spec:
               value: http://proxy.nav.no:8088
             - name: HTTPS_PROXY
               value: null
+            - name: http_proxy
+              value: http://proxy.nav.no:8088
+            - name: https_proxy
+              value: null
             - name: NO_PROXY
               value: localhost,.local
+            - name: no_proxy
+              value: localhost,.local
+            - name: JAVA_PROXY_OPTIONS
+              value: -Dhttp.proxyHost=proxy.nav.no -Dhttp.proxyPort=8088 -Dhttps.proxyHost=proxy.nav.no -Dhttps.proxyPort=8088 -Dhttp.nonProxyHosts=localhost|.local -Dhttps.nonProxyHosts=localhost|.local
           image: nginx:1.25
           name: webproxy
           ports:

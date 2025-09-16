@@ -890,12 +890,36 @@ rec {
         { name = "NAV_TRUSTSTORE_PASSWORD"; value = "changeme"; }
         { name = "NODE_EXTRA_CA_CERTS"; value = "/etc/pki/tls/certs/ca-bundle.crt"; }
       ] else [];
-      # Webproxy env
+      # Webproxy env (upper/lower case + JAVA_PROXY_OPTIONS)
       webproxyEnv = if (wpCfg.enable or false) then (
-        let http = (wpCfg.httpProxy or "http://webproxy:8088"); https = (wpCfg.httpsProxy or http); in
-        [ { name = "HTTP_PROXY"; value = http; }
+        let
+          http = (wpCfg.httpProxy or "http://webproxy:8088");
+          https = (wpCfg.httpsProxy or http);
+          npList = (wpCfg.noProxy or []);
+          npCsv = lib.concatStringsSep "," npList;
+          strip = s: lib.removePrefix "https://" (lib.removePrefix "http://" s);
+          hostPort = lib.elemAt (lib.splitString "/" (strip http)) 0;
+          parts = lib.splitString ":" hostPort;
+          hasColon = (builtins.length parts) > 1;
+          hpHost = if hasColon then lib.elemAt parts 0 else hostPort;
+          hpPort = if hasColon then lib.elemAt parts 1 else "80";
+          npJava = lib.concatStringsSep "|" npList;
+          javaOpts = lib.concatStringsSep " " ([
+            ("-Dhttp.proxyHost=" + hpHost)
+            ("-Dhttp.proxyPort=" + hpPort)
+            ("-Dhttps.proxyHost=" + hpHost)
+            ("-Dhttps.proxyPort=" + hpPort)
+          ] ++ (lib.optional (npJava != "") ("-Dhttp.nonProxyHosts=" + npJava))
+            ++ (lib.optional (npJava != "") ("-Dhttps.nonProxyHosts=" + npJava)));
+        in [
+          { name = "HTTP_PROXY"; value = http; }
           { name = "HTTPS_PROXY"; value = https; }
-        ] ++ (let np = wpCfg.noProxy or []; in lib.optional (np != []) { name = "NO_PROXY"; value = lib.concatStringsSep "," np; })
+          { name = "http_proxy"; value = http; }
+          { name = "https_proxy"; value = https; }
+        ]
+        ++ (lib.optional (npCsv != "") { name = "NO_PROXY"; value = npCsv; })
+        ++ (lib.optional (npCsv != "") { name = "no_proxy"; value = npCsv; })
+        ++ [ { name = "JAVA_PROXY_OPTIONS"; value = javaOpts; } ]
       ) else [];
       # Integrations stubs: env only
       integrationsEnv = []
@@ -967,12 +991,12 @@ rec {
       # Optional aiven label when any aiven integration is configured
       anyAiven = aivenEnabled && ((aivenKafka != null) || (aivenOpenSearch != null) || (aivenValkey != []));
       labelsWithAiven = labelsWithTeam // (lib.optionalAttrs anyAiven { aiven = "enabled"; });
-      # Auth labels when Azure/IDPorten/Wonderwall/Texas enabled
+      # Auth labels when Azure/IDPorten/Login/Texas enabled
+      wonderwallAny = (azureCfg.sidecar.enabled or false) || (idpCfg.sidecar.enabled or false) || ((cfg.login or { enable = false; }).enable or false);
       labelsWithAuth = labelsWithAiven
         // (lib.optionalAttrs ((azureCfg.application.enabled or false) || (azureCfg.sidecar.enabled or false)) { azure = "enabled"; })
-        // (lib.optionalAttrs (azureCfg.sidecar.enabled or false) { wonderwall = "enabled"; })
-        // (lib.optionalAttrs (azureCfg.sidecar.enabled or false) { otel = "enabled"; })
-        // (lib.optionalAttrs (idpCfg.sidecar.enabled or false) { idporten = "enabled"; wonderwall = "enabled"; otel = "enabled"; })
+        // (lib.optionalAttrs (idpCfg.sidecar.enabled or false) { idporten = "enabled"; })
+        // (lib.optionalAttrs wonderwallAny { wonderwall = "enabled"; otel = "enabled"; })
         // (lib.optionalAttrs (texasCfg.enable or false) { texas = "enabled"; otel = "enabled"; });
 
       # Secure logs: labels, volumes, initContainer, mounts
@@ -1217,7 +1241,12 @@ rec {
               { key = "client.truststore.jks"; path = "client.truststore.jks"; }
             ]; }; } ] else [])
           ++ (let gen = feCfg.generatedConfig or null; in lib.optional (gen != null && (feCfg.telemetryUrl or null) != null) { name = "frontend-config"; configMap = { name = "${name}-frontend-config"; }; });
-        initContainers = secureLogsInitContainers ++ wwInit ++ wwIdpInit ++ wwLoginInit
+        initContainers =
+          let finalWw = if (azureCfg.sidecar.enabled or false) then wwInit
+                         else if (idpCfg.sidecar.enabled or false) then wwIdpInit
+                         else if ((cfg.login or { enable = false; }).enable or false) then wwLoginInit
+                         else [];
+          in secureLogsInitContainers ++ finalWw
           ++ (if (texasCfg.enable or false) && ((azureCfg.application.enabled or false) || (maskinCfg.enable or false) || (tokenxCfg.enable or false)) then [
             {
               name = "texas";
