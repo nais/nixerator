@@ -60,4 +60,3 @@ spec:
       app: hello
   policyTypes:
     - Ingress
-

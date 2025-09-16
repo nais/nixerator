@@ -17,6 +17,8 @@ AP_SAMENS_OUTPUT=${AP_SAMENS_OUTPUT:-manifests-access-samens}
 AP_EGRESS_OUTPUT=${AP_EGRESS_OUTPUT:-manifests-access-egress}
 HPA_KAFKA_OUTPUT=${HPA_KAFKA_OUTPUT:-manifests-hpa-kafka}
 HPA_ADV_OUTPUT=${HPA_ADV_OUTPUT:-manifests-hpa-advanced}
+ING_GRPC_OUTPUT=${ING_GRPC_OUTPUT:-manifests-ingress-grpc}
+ING_REDIR_OUTPUT=${ING_REDIR_OUTPUT:-manifests-ingress-redirects}
 
 YQ=${YQ:-yq}
 
@@ -74,5 +76,7 @@ build_and_check "$AP_SAMENS_OUTPUT" "${AP_SAMENS_OUTPUT}.yaml"
 build_and_check "$AP_EGRESS_OUTPUT" "${AP_EGRESS_OUTPUT}.yaml"
 build_and_check "$HPA_KAFKA_OUTPUT" "${HPA_KAFKA_OUTPUT}.yaml"
 build_and_check "$HPA_ADV_OUTPUT" "${HPA_ADV_OUTPUT}.yaml"
+build_and_check "$ING_GRPC_OUTPUT" "${ING_GRPC_OUTPUT}.yaml"
+build_and_check "$ING_REDIR_OUTPUT" "${ING_REDIR_OUTPUT}.yaml"
 
 echo "All tests passed."

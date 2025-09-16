@@ -183,5 +183,19 @@
               specialArgs = { inherit lib; };
             };
           in pkgs.writeText "manifest.yaml" eval.yaml;
+          # Ingress variants
+          packages.manifests-ingress-grpc = let
+            eval = nlib.evalAppModules {
+              modules = [ self.nixosModules.app (import ./examples/app-ingress-grpc.nix) ];
+              specialArgs = { inherit lib; };
+            };
+          in pkgs.writeText "manifest.yaml" eval.yaml;
+
+          packages.manifests-ingress-redirects = let
+            eval = nlib.evalAppModules {
+              modules = [ self.nixosModules.app (import ./examples/app-ingress-redirects.nix) ];
+              specialArgs = { inherit lib; };
+            };
+          in pkgs.writeText "manifest.yaml" eval.yaml;
         });
 }

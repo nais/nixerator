@@ -90,6 +90,7 @@ rec {
     namespace ? "default",
     port ? 80,
     targetPort ? 8080,
+    portName ? "http",
     type ? "ClusterIP",
     labels ? {},
     annotations ? {}
@@ -105,7 +106,7 @@ rec {
       spec = {
         type = type;
         selector = { app = name; } // labels;
-        ports = [ { name = "http"; inherit port; targetPort = targetPort; } ];
+        ports = [ { name = portName; inherit port; targetPort = targetPort; } ];
       };
     };
 
@@ -566,25 +567,18 @@ rec {
       # Aiven secret/env/volumes injection
       sanitizeInst = s:
         lib.toUpper (lib.replaceStrings ["-" "." ":" "/" " "] ["_" "_" "_" "_" "_"] s);
-      mkSecretEnv = args: {
-        name = args.key;
-        valueFrom = {
-          secretKeyRef = ({ name = args.secretName; key = args.key; }
-            // (lib.optionalAttrs (args.optional or false) { optional = true; }));
-        };
-      };
       aivenKafkaEnv =
         let ks = aivenKafka; in
         if ks == null || (ks.secretName or null) == null then [] else [
-          mkSecretEnv { secretName = ks.secretName; key = "KAFKA_CERTIFICATE"; }
-          mkSecretEnv { secretName = ks.secretName; key = "KAFKA_PRIVATE_KEY"; }
-          mkSecretEnv { secretName = ks.secretName; key = "KAFKA_BROKERS"; }
-          mkSecretEnv { secretName = ks.secretName; key = "KAFKA_SCHEMA_REGISTRY"; }
-          mkSecretEnv { secretName = ks.secretName; key = "KAFKA_SCHEMA_REGISTRY_USER"; }
-          mkSecretEnv { secretName = ks.secretName; key = "KAFKA_SCHEMA_REGISTRY_PASSWORD"; }
-          mkSecretEnv { secretName = ks.secretName; key = "KAFKA_CA"; }
-          mkSecretEnv { secretName = ks.secretName; key = "AIVEN_CA"; optional = true; }
-          mkSecretEnv { secretName = ks.secretName; key = "KAFKA_CREDSTORE_PASSWORD"; }
+          { name = "KAFKA_CERTIFICATE"; valueFrom.secretKeyRef = { name = ks.secretName; key = "KAFKA_CERTIFICATE"; }; }
+          { name = "KAFKA_PRIVATE_KEY"; valueFrom.secretKeyRef = { name = ks.secretName; key = "KAFKA_PRIVATE_KEY"; }; }
+          { name = "KAFKA_BROKERS"; valueFrom.secretKeyRef = { name = ks.secretName; key = "KAFKA_BROKERS"; }; }
+          { name = "KAFKA_SCHEMA_REGISTRY"; valueFrom.secretKeyRef = { name = ks.secretName; key = "KAFKA_SCHEMA_REGISTRY"; }; }
+          { name = "KAFKA_SCHEMA_REGISTRY_USER"; valueFrom.secretKeyRef = { name = ks.secretName; key = "KAFKA_SCHEMA_REGISTRY_USER"; }; }
+          { name = "KAFKA_SCHEMA_REGISTRY_PASSWORD"; valueFrom.secretKeyRef = { name = ks.secretName; key = "KAFKA_SCHEMA_REGISTRY_PASSWORD"; }; }
+          { name = "KAFKA_CA"; valueFrom.secretKeyRef = { name = ks.secretName; key = "KAFKA_CA"; }; }
+          { name = "AIVEN_CA"; valueFrom.secretKeyRef = { name = ks.secretName; key = "AIVEN_CA"; optional = true; }; }
+          { name = "KAFKA_CREDSTORE_PASSWORD"; valueFrom.secretKeyRef = { name = ks.secretName; key = "KAFKA_CREDSTORE_PASSWORD"; }; }
         ] ++ (
           if (ks.mountCredentials or true) then [
             { name = "KAFKA_CERTIFICATE_PATH"; value = (ks.mountPath or "/var/run/secrets/nais.io/kafka") + "/kafka.crt"; }
@@ -597,27 +591,27 @@ rec {
       aivenOpenSearchEnv =
         let os = aivenOpenSearch; in
         if os == null || (os.secretName or null) == null then [] else [
-          mkSecretEnv { secretName = os.secretName; key = "OPEN_SEARCH_USERNAME"; }
-          mkSecretEnv { secretName = os.secretName; key = "OPEN_SEARCH_PASSWORD"; }
-          mkSecretEnv { secretName = os.secretName; key = "OPEN_SEARCH_URI"; }
-          mkSecretEnv { secretName = os.secretName; key = "OPEN_SEARCH_HOST"; optional = true; }
-          mkSecretEnv { secretName = os.secretName; key = "OPEN_SEARCH_PORT"; optional = true; }
-          mkSecretEnv { secretName = os.secretName; key = "AIVEN_CA"; optional = true; }
+          { name = "OPEN_SEARCH_USERNAME"; valueFrom.secretKeyRef = { name = os.secretName; key = "OPEN_SEARCH_USERNAME"; }; }
+          { name = "OPEN_SEARCH_PASSWORD"; valueFrom.secretKeyRef = { name = os.secretName; key = "OPEN_SEARCH_PASSWORD"; }; }
+          { name = "OPEN_SEARCH_URI"; valueFrom.secretKeyRef = { name = os.secretName; key = "OPEN_SEARCH_URI"; }; }
+          { name = "OPEN_SEARCH_HOST"; valueFrom.secretKeyRef = { name = os.secretName; key = "OPEN_SEARCH_HOST"; optional = true; }; }
+          { name = "OPEN_SEARCH_PORT"; valueFrom.secretKeyRef = { name = os.secretName; key = "OPEN_SEARCH_PORT"; optional = true; }; }
+          { name = "AIVEN_CA"; valueFrom.secretKeyRef = { name = os.secretName; key = "AIVEN_CA"; optional = true; }; }
         ];
       aivenValkeyEnv = lib.concatMap (v:
         let sn = v.secretName or null; in
         if sn == null then [] else (
           let suffix = sanitizeInst v.instance; in [
-            mkSecretEnv { secretName = sn; key = "VALKEY_USERNAME_" + suffix; }
-            mkSecretEnv { secretName = sn; key = "VALKEY_PASSWORD_" + suffix; }
-            mkSecretEnv { secretName = sn; key = "VALKEY_URI_" + suffix; }
-            mkSecretEnv { secretName = sn; key = "VALKEY_HOST_" + suffix; optional = true; }
-            mkSecretEnv { secretName = sn; key = "VALKEY_PORT_" + suffix; optional = true; }
-            mkSecretEnv { secretName = sn; key = "REDIS_USERNAME_" + suffix; }
-            mkSecretEnv { secretName = sn; key = "REDIS_PASSWORD_" + suffix; }
-            mkSecretEnv { secretName = sn; key = "REDIS_URI_" + suffix; }
-            mkSecretEnv { secretName = sn; key = "REDIS_HOST_" + suffix; optional = true; }
-            mkSecretEnv { secretName = sn; key = "REDIS_PORT_" + suffix; optional = true; }
+            { name = "VALKEY_USERNAME_" + suffix; valueFrom.secretKeyRef = { name = sn; key = "VALKEY_USERNAME_" + suffix; }; }
+            { name = "VALKEY_PASSWORD_" + suffix; valueFrom.secretKeyRef = { name = sn; key = "VALKEY_PASSWORD_" + suffix; }; }
+            { name = "VALKEY_URI_" + suffix; valueFrom.secretKeyRef = { name = sn; key = "VALKEY_URI_" + suffix; }; }
+            { name = "VALKEY_HOST_" + suffix; valueFrom.secretKeyRef = { name = sn; key = "VALKEY_HOST_" + suffix; optional = true; }; }
+            { name = "VALKEY_PORT_" + suffix; valueFrom.secretKeyRef = { name = sn; key = "VALKEY_PORT_" + suffix; optional = true; }; }
+            { name = "REDIS_USERNAME_" + suffix; valueFrom.secretKeyRef = { name = sn; key = "REDIS_USERNAME_" + suffix; }; }
+            { name = "REDIS_PASSWORD_" + suffix; valueFrom.secretKeyRef = { name = sn; key = "REDIS_PASSWORD_" + suffix; }; }
+            { name = "REDIS_URI_" + suffix; valueFrom.secretKeyRef = { name = sn; key = "REDIS_URI_" + suffix; }; }
+            { name = "REDIS_HOST_" + suffix; valueFrom.secretKeyRef = { name = sn; key = "REDIS_HOST_" + suffix; optional = true; }; }
+            { name = "REDIS_PORT_" + suffix; valueFrom.secretKeyRef = { name = sn; key = "REDIS_PORT_" + suffix; optional = true; }; }
           ])
       ) aivenValkey;
       aivenEnv = aivenKafkaEnv ++ aivenOpenSearchEnv ++ aivenValkeyEnv;
@@ -671,25 +665,62 @@ rec {
         terminationGracePeriodSeconds = cfg.terminationGracePeriodSeconds or null;
         strategy = strategy;
       };
+      # gRPC handling: change Service port name to grpc and Ingress annotation
+      isGrpc = (serviceCfg.protocol or "http") == "grpc";
+
       service = lib.optional serviceCfg.enable (mkService {
         name = name;
         namespace = namespace;
         labels = labelsWithAiven;
         annotations = annotations;
         port = serviceCfg.port;
-        targetPort = serviceCfg.targetPort;
+        targetPort = if isGrpc then "http" else serviceCfg.targetPort;
+        portName = if isGrpc then "grpc" else "http";
         type = serviceCfg.type;
       });
       ingress = lib.optional (ingressCfg.enable && ingressCfg.host != null) (mkIngress ({
         name = name;
         namespace = namespace;
         labels = labelsWithAiven;
-        annotations = annotations;
+        annotations = annotations
+          // (lib.optionalAttrs isGrpc { "nginx.ingress.kubernetes.io/backend-protocol" = "GRPC"; "nginx.ingress.kubernetes.io/use-regex" = "true"; });
         host = ingressCfg.host;
         path = ingressCfg.path;
         pathType = ingressCfg.pathType;
         servicePort = serviceCfg.port;
       } // (lib.optionalAttrs (ingressCfg.tls != null) { tls = ingressCfg.tls; })));
+      # Redirect ingresses
+      redirectIngresses =
+        let
+          stripScheme = url:
+            let u1 = lib.removePrefix "https://" url;
+                u2 = lib.removePrefix "http://" u1;
+            in lib.elemAt (lib.splitString "/" u2) 0;
+        in lib.concatMap (r:
+          let host = stripScheme r.from; target = r.to; in [
+            {
+              apiVersion = "networking.k8s.io/v1";
+              kind = "Ingress";
+              metadata = {
+                name = name + "-redirect";
+                inherit namespace;
+                labels = labelsWithAiven;
+                annotations = annotations // {
+                  "nginx.ingress.kubernetes.io/rewrite-target" = target + "/$1";
+                  "nginx.ingress.kubernetes.io/use-regex" = "true";
+                };
+              };
+              spec = {
+                rules = [
+                  { inherit host; http.paths = [ {
+                      path = "/(.*)?";
+                      pathType = "ImplementationSpecific";
+                      backend.service = { inherit name; port.number = serviceCfg.port; };
+                    } ]; }
+                ];
+              };
+            }
+          ]) (ingressCfg.redirects or []);
       hpa = lib.optional hpaCfg.enable (mkHPA ({
         inherit name namespace;
         minReplicas = hpaCfg.minReplicas;
@@ -852,6 +883,7 @@ rec {
       res = [ deployment ]
         ++ service
         ++ ingress
+        ++ redirectIngresses
         ++ hpa
         ++ pdb
         ++ serviceAccount

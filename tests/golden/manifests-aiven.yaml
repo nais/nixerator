@@ -21,9 +21,7 @@ spec:
         app: aiven-demo
     spec:
       containers:
-        - image: nginx:1.25
-          name: aiven-demo
-          env:
+        - env:
             - name: OPEN_SEARCH_USERNAME
               valueFrom:
                 secretKeyRef:
@@ -57,33 +55,6 @@ spec:
                   key: AIVEN_CA
                   name: aiven-opensearch
                   optional: true
-            - name: REDIS_USERNAME_NAISTEST1
-              valueFrom:
-                secretKeyRef:
-                  key: REDIS_USERNAME_NAISTEST1
-                  name: aiven-valkey-naistest1
-            - name: REDIS_PASSWORD_NAISTEST1
-              valueFrom:
-                secretKeyRef:
-                  key: REDIS_PASSWORD_NAISTEST1
-                  name: aiven-valkey-naistest1
-            - name: REDIS_URI_NAISTEST1
-              valueFrom:
-                secretKeyRef:
-                  key: REDIS_URI_NAISTEST1
-                  name: aiven-valkey-naistest1
-            - name: REDIS_HOST_NAISTEST1
-              valueFrom:
-                secretKeyRef:
-                  key: REDIS_HOST_NAISTEST1
-                  name: aiven-valkey-naistest1
-                  optional: true
-            - name: REDIS_PORT_NAISTEST1
-              valueFrom:
-                secretKeyRef:
-                  key: REDIS_PORT_NAISTEST1
-                  name: aiven-valkey-naistest1
-                  optional: true
             - name: VALKEY_USERNAME_NAISTEST1
               valueFrom:
                 secretKeyRef:
@@ -111,6 +82,89 @@ spec:
                   key: VALKEY_PORT_NAISTEST1
                   name: aiven-valkey-naistest1
                   optional: true
+            - name: REDIS_USERNAME_NAISTEST1
+              valueFrom:
+                secretKeyRef:
+                  key: REDIS_USERNAME_NAISTEST1
+                  name: aiven-valkey-naistest1
+            - name: REDIS_PASSWORD_NAISTEST1
+              valueFrom:
+                secretKeyRef:
+                  key: REDIS_PASSWORD_NAISTEST1
+                  name: aiven-valkey-naistest1
+            - name: REDIS_URI_NAISTEST1
+              valueFrom:
+                secretKeyRef:
+                  key: REDIS_URI_NAISTEST1
+                  name: aiven-valkey-naistest1
+            - name: REDIS_HOST_NAISTEST1
+              valueFrom:
+                secretKeyRef:
+                  key: REDIS_HOST_NAISTEST1
+                  name: aiven-valkey-naistest1
+                  optional: true
+            - name: REDIS_PORT_NAISTEST1
+              valueFrom:
+                secretKeyRef:
+                  key: REDIS_PORT_NAISTEST1
+                  name: aiven-valkey-naistest1
+                  optional: true
+            - name: VALKEY_USERNAME_NAISTEST2
+              valueFrom:
+                secretKeyRef:
+                  key: VALKEY_USERNAME_NAISTEST2
+                  name: aiven-valkey-naistest2
+            - name: VALKEY_PASSWORD_NAISTEST2
+              valueFrom:
+                secretKeyRef:
+                  key: VALKEY_PASSWORD_NAISTEST2
+                  name: aiven-valkey-naistest2
+            - name: VALKEY_URI_NAISTEST2
+              valueFrom:
+                secretKeyRef:
+                  key: VALKEY_URI_NAISTEST2
+                  name: aiven-valkey-naistest2
+            - name: VALKEY_HOST_NAISTEST2
+              valueFrom:
+                secretKeyRef:
+                  key: VALKEY_HOST_NAISTEST2
+                  name: aiven-valkey-naistest2
+                  optional: true
+            - name: VALKEY_PORT_NAISTEST2
+              valueFrom:
+                secretKeyRef:
+                  key: VALKEY_PORT_NAISTEST2
+                  name: aiven-valkey-naistest2
+                  optional: true
+            - name: REDIS_USERNAME_NAISTEST2
+              valueFrom:
+                secretKeyRef:
+                  key: REDIS_USERNAME_NAISTEST2
+                  name: aiven-valkey-naistest2
+            - name: REDIS_PASSWORD_NAISTEST2
+              valueFrom:
+                secretKeyRef:
+                  key: REDIS_PASSWORD_NAISTEST2
+                  name: aiven-valkey-naistest2
+            - name: REDIS_URI_NAISTEST2
+              valueFrom:
+                secretKeyRef:
+                  key: REDIS_URI_NAISTEST2
+                  name: aiven-valkey-naistest2
+            - name: REDIS_HOST_NAISTEST2
+              valueFrom:
+                secretKeyRef:
+                  key: REDIS_HOST_NAISTEST2
+                  name: aiven-valkey-naistest2
+                  optional: true
+            - name: REDIS_PORT_NAISTEST2
+              valueFrom:
+                secretKeyRef:
+                  key: REDIS_PORT_NAISTEST2
+                  name: aiven-valkey-naistest2
+                  optional: true
+          image: nginx:1.25
+          name: aiven-demo
           ports:
             - containerPort: 8080
               name: http

@@ -1,0 +1,82 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations: {}
+  labels: {}
+  name: ingress-redirects
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ingress-redirects
+  template:
+    metadata:
+      labels:
+        app: ingress-redirects
+    spec:
+      containers:
+        - image: nginx:1.25
+          name: ingress-redirects
+          ports:
+            - containerPort: 8080
+              name: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  annotations: {}
+  labels: {}
+  name: ingress-redirects
+  namespace: default
+spec:
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+  selector:
+    app: ingress-redirects
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations: {}
+  labels: {}
+  name: ingress-redirects
+  namespace: default
+spec:
+  rules:
+    - host: new.example.local
+      http:
+        paths:
+          - backend:
+              service:
+                name: ingress-redirects
+                port:
+                  number: 80
+            path: /
+            pathType: Prefix
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: https://new.example.local/$1
+    nginx.ingress.kubernetes.io/use-regex: "true"
+  labels: {}
+  name: ingress-redirects-redirect
+  namespace: default
+spec:
+  rules:
+    - host: old.example.local
+      http:
+        paths:
+          - backend:
+              service:
+                name: ingress-redirects
+                port:
+                  number: 80
+            path: /(.*)?
+            pathType: ImplementationSpecific
+

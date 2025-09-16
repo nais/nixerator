@@ -58,6 +58,9 @@ Recently added toward Naiserator parity
   - Optionally emits `Valkey` (aiven.io/v1alpha1) resources when `aiven.manageInstances = true` and `aiven.project` is set.
   - Adds label `aiven=enabled` on pod template to match Naiserator behavior.
   - Optionally append `aiven.rangeCIDR` to `accessPolicy.outbound.allowedCIDRs` when egress is restricted.
+- Ingress parity:
+  - gRPC: set `service.protocol = "grpc"` to emit Ingress annotation `nginx.ingress.kubernetes.io/backend-protocol=GRPC` and change Service port name to `grpc` with targetPort `http`.
+  - Redirects: `ingress.redirects = [ { from = "https://old"; to = "https://new"; } ]` to emit a second Ingress with `rewrite-target: <to>/$1` and regex path `/(.*)?`.
 
 Docs generation
 - `lib.orgDocsFromOptions` and `lib.orgDocsFromEval` turn the evaluated options tree into an Emacs Org file listing option names, types, defaults, and descriptions.

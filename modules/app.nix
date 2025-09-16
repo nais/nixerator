@@ -101,6 +101,11 @@ in
         default = 8080;
         description = "Container port to target.";
       };
+      protocol = lib.mkOption {
+        type = types.enum [ "http" "grpc" ];
+        default = "http";
+        description = "Service protocol. When 'grpc', Service port name becomes 'grpc' and Ingress backend-protocol is set to GRPC.";
+      };
       type = lib.mkOption {
         type = types.str;
         default = "ClusterIP";
@@ -137,6 +142,15 @@ in
         }; })));
         default = null;
         description = "Optional TLS entries for the ingress.";
+      };
+      redirects = lib.mkOption {
+        type = types.listOf (types.submodule ({ ... }: { options = {
+          from = lib.mkOption { type = types.str; description = "Source URL to redirect from (e.g., https://old.example)"; };
+          to = lib.mkOption { type = types.str; description = "Target URL to redirect to (e.g., https://new.example)"; };
+        }; }));
+        default = [];
+        description = "List of redirect rules that produce additional Ingresses with rewrite-target annotations.";
+        example = [ { from = "https://old.example"; to = "https://new.example"; } ];
       };
     };
 

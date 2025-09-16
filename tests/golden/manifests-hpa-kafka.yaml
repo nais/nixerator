@@ -10,6 +10,8 @@ spec:
   selector:
     matchLabels:
       app: hpa-kafka
+  strategy:
+    type: RollingUpdate
   template:
     metadata:
       labels:
@@ -46,6 +48,12 @@ metadata:
 spec:
   maxReplicas: 6
   metrics:
+    - resource:
+        name: cpu
+        target:
+          averageUtilization: 80
+          type: Utilization
+      type: Resource
     - external:
         metric:
           name: kafka_consumergroup_group_lag
@@ -62,4 +70,3 @@ spec:
     apiVersion: apps/v1
     kind: Deployment
     name: hpa-kafka
-

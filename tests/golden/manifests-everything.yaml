@@ -51,6 +51,22 @@ spec:
               value: bar
             - name: LOG_LEVEL
               value: debug
+            - name: NAIS_APP_NAME
+              value: kitchen-sink
+            - name: NAIS_NAMESPACE
+              value: default
+            - name: NAIS_APP_IMAGE
+              value: nginx:1.25
+            - name: NAIS_CLUSTER_NAME
+              value: dev-cluster
+            - name: NAIS_CLIENT_ID
+              value: default:kitchen-sink
+            - name: LOG4J_FORMAT_MSG_NO_LOOKUPS
+              value: "true"
+            - name: PORT
+              value: "8080"
+            - name: BIND_ADDRESS
+              value: 0.0.0.0:8080
             - name: OPEN_SEARCH_USERNAME
               valueFrom:
                 secretKeyRef:
@@ -84,33 +100,6 @@ spec:
                   key: AIVEN_CA
                   name: aiven-opensearch
                   optional: true
-            - name: REDIS_USERNAME_NAISTEST1
-              valueFrom:
-                secretKeyRef:
-                  key: REDIS_USERNAME_NAISTEST1
-                  name: aiven-valkey-naistest1
-            - name: REDIS_PASSWORD_NAISTEST1
-              valueFrom:
-                secretKeyRef:
-                  key: REDIS_PASSWORD_NAISTEST1
-                  name: aiven-valkey-naistest1
-            - name: REDIS_URI_NAISTEST1
-              valueFrom:
-                secretKeyRef:
-                  key: REDIS_URI_NAISTEST1
-                  name: aiven-valkey-naistest1
-            - name: REDIS_HOST_NAISTEST1
-              valueFrom:
-                secretKeyRef:
-                  key: REDIS_HOST_NAISTEST1
-                  name: aiven-valkey-naistest1
-                  optional: true
-            - name: REDIS_PORT_NAISTEST1
-              valueFrom:
-                secretKeyRef:
-                  key: REDIS_PORT_NAISTEST1
-                  name: aiven-valkey-naistest1
-                  optional: true
             - name: VALKEY_USERNAME_NAISTEST1
               valueFrom:
                 secretKeyRef:
@@ -138,22 +127,33 @@ spec:
                   key: VALKEY_PORT_NAISTEST1
                   name: aiven-valkey-naistest1
                   optional: true
-            - name: NAIS_APP_NAME
-              value: kitchen-sink
-            - name: NAIS_NAMESPACE
-              value: default
-            - name: NAIS_APP_IMAGE
-              value: nginx:1.25
-            - name: NAIS_CLUSTER_NAME
-              value: dev-cluster
-            - name: NAIS_CLIENT_ID
-              value: default:kitchen-sink
-            - name: LOG4J_FORMAT_MSG_NO_LOOKUPS
-              value: "true"
-            - name: PORT
-              value: "8080"
-            - name: BIND_ADDRESS
-              value: 0.0.0.0:8080
+            - name: REDIS_USERNAME_NAISTEST1
+              valueFrom:
+                secretKeyRef:
+                  key: REDIS_USERNAME_NAISTEST1
+                  name: aiven-valkey-naistest1
+            - name: REDIS_PASSWORD_NAISTEST1
+              valueFrom:
+                secretKeyRef:
+                  key: REDIS_PASSWORD_NAISTEST1
+                  name: aiven-valkey-naistest1
+            - name: REDIS_URI_NAISTEST1
+              valueFrom:
+                secretKeyRef:
+                  key: REDIS_URI_NAISTEST1
+                  name: aiven-valkey-naistest1
+            - name: REDIS_HOST_NAISTEST1
+              valueFrom:
+                secretKeyRef:
+                  key: REDIS_HOST_NAISTEST1
+                  name: aiven-valkey-naistest1
+                  optional: true
+            - name: REDIS_PORT_NAISTEST1
+              valueFrom:
+                secretKeyRef:
+                  key: REDIS_PORT_NAISTEST1
+                  name: aiven-valkey-naistest1
+                  optional: true
           envFrom:
             - configMapRef:
                 name: app-config
@@ -476,6 +476,7 @@ kind: PodMonitor
 metadata:
   annotations: {}
   labels:
+    aiven: enabled
     team: default
   name: kitchen-sink
   namespace: default
@@ -532,35 +533,3 @@ metadata:
     team: default
   name: extra-config
   namespace: default
----
-apiVersion: aiven.nais.io/v1
-kind: AivenApplication
-metadata:
-  annotations: {}
-  labels:
-    aiven: enabled
-    team: default
-  name: kitchen-sink
-  namespace: default
-spec:
-  openSearch:
-    access: read
-    instance: opensearch-default-naistest
-  valkey:
-    - access: read
-      instance: naistest1
----
-apiVersion: aiven.io/v1alpha1
-kind: Valkey
-metadata:
-  annotations: {}
-  labels:
-    aiven: enabled
-    team: default
-  name: valkey-default-naistest1
-  namespace: default
-spec:
-  plan: startup-4
-  project: dev-project
-  tags:
-    app: kitchen-sink

@@ -49,14 +49,14 @@ metadata:
   namespace: default
 spec:
   egress:
-    - to:
+    - ports:
+        - port: 443
+        - port: 8443
+      to:
         - ipBlock:
             cidr: 1.2.3.4/32
         - ipBlock:
             cidr: 10.0.0.0/8
-      ports:
-        - port: 443
-        - port: 8443
     - ports:
         - port: 53
           protocol: UDP
@@ -65,4 +65,3 @@ spec:
       app: hello
   policyTypes:
     - Egress
-
