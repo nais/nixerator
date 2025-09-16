@@ -2,7 +2,7 @@ Nixerator is a Nix flake that helps you define common Kubernetes resources (Depl
 
 Quick start
 - Prereqs: Nix with flakes enabled.
-- Build example manifests: `nix build .#manifests-basic && echo && cat result`
+- Build example manifests (application module): `nix build .#manifests-basic && echo && cat result`
 
 Modules workflow (recommended)
 - Evaluate module to manifests: `nix build .#manifests-module-basic && cat result`
@@ -11,9 +11,10 @@ Modules workflow (recommended)
 The module lives at `nixosModules.app` and can be evaluated with `lib.evalModules`. Use `lib.evalAppModules { modules = [ self.nixosModules.app yourModule ]; }` to get `cfg`, `options`, `resources`, and `yaml`.
 
 What’s inside
-- `flake.nix` exposes a small library and an example package `manifests-basic` that builds a multi-document YAML.
-- `lib/default.nix` provides helpers: `mkDeployment`, `mkService`, `mkIngress`, `mkHPA`, `mkSecret`, `mkApp`, and `renderManifests`.
-- `examples/basic.nix` shows composing an app from the helpers.
+- `flake.nix` exposes the typed application module and builds `manifests-basic` by evaluating it.
+- `lib/default.nix` provides helpers: `mkDeployment`, `mkService`, `mkIngress`, `mkHPA`, `mkSecret`, `mkApp`, `evalAppModules`, and `renderManifests`.
+- `modules/app.nix` defines the application interface (typed NixOS-style module).
+- `examples/app-basic.nix` is a module config demonstrating the interface.
  - `modules/app.nix` defines a NixOS-style module with typed options under `app.*`.
  - `examples/app-basic.nix` is a module config demonstrating the typed interface.
 

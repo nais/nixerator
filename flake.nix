@@ -26,30 +26,13 @@
           lib = pkgs.lib;
           nlib = import ./lib { inherit lib; };
         in {
-          # Example: build a ready-to-apply manifest bundle
-          packages.manifests-basic = pkgs.writeText "manifest.yaml"
-            (nlib.renderManifests [
-              (nlib.mkDeployment {
-                name = "hello";
-                namespace = "default";
-                image = "nginx:1.25";
-                replicas = 2;
-                env = { FOO = "bar"; };
-                ports = [{ name = "http"; containerPort = 8080; }];
-              })
-              (nlib.mkService {
-                name = "hello";
-                namespace = "default";
-                port = 80;
-                targetPort = 8080;
-              })
-              (nlib.mkIngress {
-                name = "hello";
-                namespace = "default";
-                host = "hello.local";
-                servicePort = 80;
-              })
-            ]);
+          # Example: build a ready-to-apply manifest bundle via the application module
+          packages.manifests-basic = let
+            eval = nlib.evalAppModules {
+              modules = [ self.nixosModules.app (import ./examples/app-basic.nix) ];
+              specialArgs = { inherit lib; };
+            };
+          in pkgs.writeText "manifest.yaml" eval.yaml;
 
           # Example: evaluate NixOS-style modules to manifests
           packages.manifests-module-basic = let
