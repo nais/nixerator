@@ -1,0 +1,71 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations: {}
+  labels: {}
+  name: hpa-advanced
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hpa-advanced
+  template:
+    metadata:
+      labels:
+        app: hpa-advanced
+    spec:
+      containers:
+        - image: nginx:1.25
+          name: hpa-advanced
+          ports:
+            - containerPort: 8080
+              name: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  annotations: {}
+  labels: {}
+  name: hpa-advanced
+  namespace: default
+spec:
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+  selector:
+    app: hpa-advanced
+  type: ClusterIP
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: hpa-advanced
+  namespace: default
+spec:
+  maxReplicas: 6
+  metrics:
+    - resource:
+        name: cpu
+        target:
+          averageUtilization: 75
+          type: Utilization
+      type: Resource
+    - external:
+        metric:
+          name: kafka_consumergroup_group_lag
+          selector:
+            matchLabels:
+              group: myconsumergroup
+              topic: default.mytopic
+        target:
+          averageValue: "100"
+          type: AverageValue
+      type: External
+  minReplicas: 3
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: hpa-advanced
+

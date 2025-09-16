@@ -5,6 +5,7 @@ metadata:
     euthanaisa.nais.io/ttl: 24h
     reloader.stakater.com/search: "true"
   labels:
+    aiven: enabled
     euthanaisa.nais.io/enabled: "true"
     team: default
   name: kitchen-sink
@@ -13,6 +14,7 @@ spec:
   replicas: 3
   selector:
     matchLabels:
+      aiven: enabled
       app: kitchen-sink
       euthanaisa.nais.io/enabled: "true"
       team: default
@@ -26,6 +28,7 @@ spec:
       annotations:
         kubectl.kubernetes.io/default-container: kitchen-sink
       labels:
+        aiven: enabled
         app: kitchen-sink
         euthanaisa.nais.io/enabled: "true"
         team: default
@@ -48,6 +51,93 @@ spec:
               value: bar
             - name: LOG_LEVEL
               value: debug
+            - name: OPEN_SEARCH_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  key: OPEN_SEARCH_USERNAME
+                  name: aiven-opensearch
+            - name: OPEN_SEARCH_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  key: OPEN_SEARCH_PASSWORD
+                  name: aiven-opensearch
+            - name: OPEN_SEARCH_URI
+              valueFrom:
+                secretKeyRef:
+                  key: OPEN_SEARCH_URI
+                  name: aiven-opensearch
+            - name: OPEN_SEARCH_HOST
+              valueFrom:
+                secretKeyRef:
+                  key: OPEN_SEARCH_HOST
+                  name: aiven-opensearch
+                  optional: true
+            - name: OPEN_SEARCH_PORT
+              valueFrom:
+                secretKeyRef:
+                  key: OPEN_SEARCH_PORT
+                  name: aiven-opensearch
+                  optional: true
+            - name: AIVEN_CA
+              valueFrom:
+                secretKeyRef:
+                  key: AIVEN_CA
+                  name: aiven-opensearch
+                  optional: true
+            - name: REDIS_USERNAME_NAISTEST1
+              valueFrom:
+                secretKeyRef:
+                  key: REDIS_USERNAME_NAISTEST1
+                  name: aiven-valkey-naistest1
+            - name: REDIS_PASSWORD_NAISTEST1
+              valueFrom:
+                secretKeyRef:
+                  key: REDIS_PASSWORD_NAISTEST1
+                  name: aiven-valkey-naistest1
+            - name: REDIS_URI_NAISTEST1
+              valueFrom:
+                secretKeyRef:
+                  key: REDIS_URI_NAISTEST1
+                  name: aiven-valkey-naistest1
+            - name: REDIS_HOST_NAISTEST1
+              valueFrom:
+                secretKeyRef:
+                  key: REDIS_HOST_NAISTEST1
+                  name: aiven-valkey-naistest1
+                  optional: true
+            - name: REDIS_PORT_NAISTEST1
+              valueFrom:
+                secretKeyRef:
+                  key: REDIS_PORT_NAISTEST1
+                  name: aiven-valkey-naistest1
+                  optional: true
+            - name: VALKEY_USERNAME_NAISTEST1
+              valueFrom:
+                secretKeyRef:
+                  key: VALKEY_USERNAME_NAISTEST1
+                  name: aiven-valkey-naistest1
+            - name: VALKEY_PASSWORD_NAISTEST1
+              valueFrom:
+                secretKeyRef:
+                  key: VALKEY_PASSWORD_NAISTEST1
+                  name: aiven-valkey-naistest1
+            - name: VALKEY_URI_NAISTEST1
+              valueFrom:
+                secretKeyRef:
+                  key: VALKEY_URI_NAISTEST1
+                  name: aiven-valkey-naistest1
+            - name: VALKEY_HOST_NAISTEST1
+              valueFrom:
+                secretKeyRef:
+                  key: VALKEY_HOST_NAISTEST1
+                  name: aiven-valkey-naistest1
+                  optional: true
+            - name: VALKEY_PORT_NAISTEST1
+              valueFrom:
+                secretKeyRef:
+                  key: VALKEY_PORT_NAISTEST1
+                  name: aiven-valkey-naistest1
+                  optional: true
             - name: NAIS_APP_NAME
               value: kitchen-sink
             - name: NAIS_NAMESPACE
@@ -64,6 +154,11 @@ spec:
               value: "8080"
             - name: BIND_ADDRESS
               value: 0.0.0.0:8080
+          envFrom:
+            - configMapRef:
+                name: app-config
+            - secretRef:
+                name: api-token
           image: nginx:1.25
           lifecycle:
             preStop:
@@ -82,6 +177,8 @@ spec:
           ports:
             - containerPort: 8080
               name: http
+            - containerPort: 9090
+              name: metrics
           readinessProbe:
             failureThreshold: 3
             httpGet:
@@ -132,6 +229,8 @@ spec:
         fsGroupChangePolicy: OnRootMismatch
         seccompProfile:
           type: RuntimeDefault
+      serviceAccountName: kitchen-sink
+      terminationGracePeriodSeconds: 45
       tolerations:
         - effect: NoSchedule
           key: dedicated
@@ -158,6 +257,7 @@ kind: Service
 metadata:
   annotations: {}
   labels:
+    aiven: enabled
     team: default
   name: kitchen-sink
   namespace: default
@@ -167,6 +267,7 @@ spec:
       port: 80
       targetPort: 8080
   selector:
+    aiven: enabled
     app: kitchen-sink
     team: default
   type: ClusterIP
@@ -176,6 +277,7 @@ kind: Ingress
 metadata:
   annotations: {}
   labels:
+    aiven: enabled
     team: default
   name: kitchen-sink
   namespace: default
@@ -233,7 +335,7 @@ metadata:
     iam.gke.io/gcp-service-account: svc@project.iam.gserviceaccount.com
   labels:
     team: default
-  name: null
+  name: kitchen-sink
   namespace: default
 ---
 apiVersion: networking.k8s.io/v1
@@ -303,16 +405,49 @@ spec:
         - port: 8080
   podSelector:
     matchLabels:
-      app: kitchen-sink-access
+      app: kitchen-sink
   policyTypes:
     - Ingress
     - Egress
+---
+apiVersion: aiven.nais.io/v1
+kind: AivenApplication
+metadata:
+  annotations: {}
+  labels:
+    aiven: enabled
+    team: default
+  name: kitchen-sink
+  namespace: default
+spec:
+  openSearch:
+    access: read
+    instance: opensearch-default-naistest
+  valkey:
+    - access: read
+      instance: naistest1
+---
+apiVersion: aiven.io/v1alpha1
+kind: Valkey
+metadata:
+  annotations: {}
+  labels:
+    aiven: enabled
+    team: default
+  name: valkey-default-naistest1
+  namespace: default
+spec:
+  plan: startup-4
+  project: dev-project
+  tags:
+    app: kitchen-sink
 ---
 apiVersion: networking.gke.io/v1alpha3
 kind: FQDNNetworkPolicy
 metadata:
   annotations: {}
   labels:
+    aiven: enabled
     team: default
   name: kitchen-sink-fqdn
   namespace: default
@@ -349,7 +484,7 @@ spec:
   podMetricsEndpoints:
     - honorLabels: false
       path: /metrics
-      port: http
+      port: metrics
   podTargetLabels:
     - app
     - team
@@ -397,3 +532,35 @@ metadata:
     team: default
   name: extra-config
   namespace: default
+---
+apiVersion: aiven.nais.io/v1
+kind: AivenApplication
+metadata:
+  annotations: {}
+  labels:
+    aiven: enabled
+    team: default
+  name: kitchen-sink
+  namespace: default
+spec:
+  openSearch:
+    access: read
+    instance: opensearch-default-naistest
+  valkey:
+    - access: read
+      instance: naistest1
+---
+apiVersion: aiven.io/v1alpha1
+kind: Valkey
+metadata:
+  annotations: {}
+  labels:
+    aiven: enabled
+    team: default
+  name: valkey-default-naistest1
+  namespace: default
+spec:
+  plan: startup-4
+  project: dev-project
+  tags:
+    app: kitchen-sink

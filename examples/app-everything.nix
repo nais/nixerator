@@ -8,6 +8,7 @@
 
     command = [ "/docker-entrypoint.sh" "nginx" "-g" "daemon off;" ];
     env = { FOO = "bar"; LOG_LEVEL = "debug"; };
+    envFrom = [ { configMap = "app-config"; } { secret = "api-token"; } ];
     imagePullSecrets = [ "regcred" ];
 
     service = {
@@ -51,6 +52,7 @@
     ];
 
     preStop.http = { path = "/shutdown"; port = null; };
+    terminationGracePeriodSeconds = 45;
 
     strategy = {
       type = "RollingUpdate";
@@ -120,7 +122,8 @@
     prometheus = {
       enable = true;
       kind = "PodMonitor";
-      endpoints = [ { port = "http"; path = "/metrics"; } ];
+      endpoints = [ { port = "metrics"; path = "/metrics"; } ];
+      containerPort = 9090;
     };
 
     # Defaults
@@ -137,12 +140,12 @@
     hostAliases = [ { host = "db.internal"; ip = "10.0.0.10"; } ];
 
     # Aiven integrations (demo)
-    # aiven = {
-    #   enable = true;
-    #   project = "dev-project";
-    #   manageInstances = true;
-    #   openSearch = { instance = "naistest"; access = "read"; };
-    #   valkey = [ { instance = "naistest1"; access = "read"; createInstance = true; } ];
-    # };
+    aiven = {
+      enable = true;
+      project = "dev-project";
+      manageInstances = true;
+      openSearch = { instance = "naistest"; access = "read"; secretName = "aiven-opensearch"; };
+      valkey = [ { instance = "naistest1"; access = "read"; createInstance = true; secretName = "aiven-valkey-naistest1"; } ];
+    };
   };
 }

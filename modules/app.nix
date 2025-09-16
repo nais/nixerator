@@ -161,6 +161,15 @@ in
         default = 80;
         description = "CPU target utilization percentage.";
       };
+      kafka = lib.mkOption {
+        type = types.nullOr (types.submodule ({ ... }: { options = {
+          topic = lib.mkOption { type = types.str; description = "Kafka topic to scale on (e.g., '<ns>.<topic>')."; };
+          consumerGroup = lib.mkOption { type = types.str; description = "Kafka consumer group name."; };
+          threshold = lib.mkOption { type = types.oneOf [ types.int types.str ]; description = "Average group lag threshold to target (int or string)."; };
+        }; }));
+        default = null;
+        description = "Optional Kafka scaling metric for HPA (adds External metric).";
+      };
     };
 
     probes = {

@@ -32,6 +32,9 @@ in {
       type = types.nullOr (types.submodule ({ ... }: { options = {
         pool = lib.mkOption { type = types.str; description = "Kafka pool name (kafkarator)."; };
         streams = lib.mkOption { type = types.bool; default = false; description = "Request a kafka.nais.io/Stream for streams apps."; };
+        secretName = lib.mkOption { type = types.nullOr types.str; default = null; description = "Name of Aiven kafka secret to mount/inject (overrides operator-generated name)."; };
+        mountCredentials = lib.mkOption { type = types.bool; default = true; description = "Mount kafka credential files from secret into the container."; };
+        mountPath = lib.mkOption { type = types.str; default = "/var/run/secrets/nais.io/kafka"; description = "Mount path for kafka credential files."; };
       }; }));
       default = null;
       description = "Kafka integration via AivenApplication (pool, optional streams).";
@@ -41,6 +44,7 @@ in {
       type = types.nullOr (types.submodule ({ ... }: { options = {
         instance = lib.mkOption { type = types.str; description = "OpenSearch instance short name (combined with namespace)."; };
         access = lib.mkOption { type = types.enum [ "read" "write" ]; default = "read"; description = "Access level."; };
+        secretName = lib.mkOption { type = types.nullOr types.str; default = null; description = "Name of OpenSearch secret to inject env vars from (overrides operator-generated name)."; };
       }; }));
       default = null;
       description = "OpenSearch access via AivenApplication.";
@@ -52,6 +56,7 @@ in {
         access = lib.mkOption { type = types.enum [ "read" "write" ]; default = "read"; description = "Access level for the instance."; };
         plan = lib.mkOption { type = types.str; default = "startup-4"; description = "Plan for managed Valkey instance if created."; };
         createInstance = lib.mkOption { type = types.bool; default = false; description = "If true and project is set, emit aiven.io/v1alpha1 Valkey for this instance."; };
+        secretName = lib.mkOption { type = types.nullOr types.str; default = null; description = "Name of Valkey secret to inject env vars from (overrides operator-generated name)."; };
       }; }));
       default = [];
       description = "Valkey access via AivenApplication, optionally creating Valkey instances.";
@@ -64,4 +69,3 @@ in {
     };
   };
 }
-

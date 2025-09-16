@@ -153,5 +153,35 @@
               specialArgs = { inherit lib; };
             };
           in pkgs.writeText "manifest.yaml" eval.yaml;
+
+          # AccessPolicy variants
+          packages.manifests-access-samens = let
+            eval = nlib.evalAppModules {
+              modules = [ self.nixosModules.app self.nixosModules.appAccessPolicy (import ./examples/app-access-samens.nix) ];
+              specialArgs = { inherit lib; };
+            };
+          in pkgs.writeText "manifest.yaml" eval.yaml;
+
+          packages.manifests-access-egress = let
+            eval = nlib.evalAppModules {
+              modules = [ self.nixosModules.app self.nixosModules.appAccessPolicy (import ./examples/app-access-egress.nix) ];
+              specialArgs = { inherit lib; };
+            };
+          in pkgs.writeText "manifest.yaml" eval.yaml;
+
+          # HPA Kafka examples
+          packages.manifests-hpa-kafka = let
+            eval = nlib.evalAppModules {
+              modules = [ self.nixosModules.app (import ./examples/app-hpa-kafka.nix) ];
+              specialArgs = { inherit lib; };
+            };
+          in pkgs.writeText "manifest.yaml" eval.yaml;
+
+          packages.manifests-hpa-advanced = let
+            eval = nlib.evalAppModules {
+              modules = [ self.nixosModules.app (import ./examples/app-hpa-advanced.nix) ];
+              specialArgs = { inherit lib; };
+            };
+          in pkgs.writeText "manifest.yaml" eval.yaml;
         });
 }

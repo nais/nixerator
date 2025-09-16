@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations: {}
+  labels: {}
+  name: hello
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hello
+  strategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: hello
+    spec:
+      containers:
+        - image: nginx:1.25
+          name: hello
+          ports:
+            - containerPort: 8080
+              name: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  annotations: {}
+  labels: {}
+  name: hello
+  namespace: default
+spec:
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+  selector:
+    app: hello
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  annotations: {}
+  labels: {}
+  name: hello-access
+  namespace: default
+spec:
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 1.2.3.4/32
+        - ipBlock:
+            cidr: 10.0.0.0/8
+      ports:
+        - port: 443
+        - port: 8443
+    - ports:
+        - port: 53
+          protocol: UDP
+  podSelector:
+    matchLabels:
+      app: hello
+  policyTypes:
+    - Egress
+

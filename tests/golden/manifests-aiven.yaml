@@ -23,10 +23,97 @@ spec:
       containers:
         - image: nginx:1.25
           name: aiven-demo
+          env:
+            - name: OPEN_SEARCH_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  key: OPEN_SEARCH_USERNAME
+                  name: aiven-opensearch
+            - name: OPEN_SEARCH_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  key: OPEN_SEARCH_PASSWORD
+                  name: aiven-opensearch
+            - name: OPEN_SEARCH_URI
+              valueFrom:
+                secretKeyRef:
+                  key: OPEN_SEARCH_URI
+                  name: aiven-opensearch
+            - name: OPEN_SEARCH_HOST
+              valueFrom:
+                secretKeyRef:
+                  key: OPEN_SEARCH_HOST
+                  name: aiven-opensearch
+                  optional: true
+            - name: OPEN_SEARCH_PORT
+              valueFrom:
+                secretKeyRef:
+                  key: OPEN_SEARCH_PORT
+                  name: aiven-opensearch
+                  optional: true
+            - name: AIVEN_CA
+              valueFrom:
+                secretKeyRef:
+                  key: AIVEN_CA
+                  name: aiven-opensearch
+                  optional: true
+            - name: REDIS_USERNAME_NAISTEST1
+              valueFrom:
+                secretKeyRef:
+                  key: REDIS_USERNAME_NAISTEST1
+                  name: aiven-valkey-naistest1
+            - name: REDIS_PASSWORD_NAISTEST1
+              valueFrom:
+                secretKeyRef:
+                  key: REDIS_PASSWORD_NAISTEST1
+                  name: aiven-valkey-naistest1
+            - name: REDIS_URI_NAISTEST1
+              valueFrom:
+                secretKeyRef:
+                  key: REDIS_URI_NAISTEST1
+                  name: aiven-valkey-naistest1
+            - name: REDIS_HOST_NAISTEST1
+              valueFrom:
+                secretKeyRef:
+                  key: REDIS_HOST_NAISTEST1
+                  name: aiven-valkey-naistest1
+                  optional: true
+            - name: REDIS_PORT_NAISTEST1
+              valueFrom:
+                secretKeyRef:
+                  key: REDIS_PORT_NAISTEST1
+                  name: aiven-valkey-naistest1
+                  optional: true
+            - name: VALKEY_USERNAME_NAISTEST1
+              valueFrom:
+                secretKeyRef:
+                  key: VALKEY_USERNAME_NAISTEST1
+                  name: aiven-valkey-naistest1
+            - name: VALKEY_PASSWORD_NAISTEST1
+              valueFrom:
+                secretKeyRef:
+                  key: VALKEY_PASSWORD_NAISTEST1
+                  name: aiven-valkey-naistest1
+            - name: VALKEY_URI_NAISTEST1
+              valueFrom:
+                secretKeyRef:
+                  key: VALKEY_URI_NAISTEST1
+                  name: aiven-valkey-naistest1
+            - name: VALKEY_HOST_NAISTEST1
+              valueFrom:
+                secretKeyRef:
+                  key: VALKEY_HOST_NAISTEST1
+                  name: aiven-valkey-naistest1
+                  optional: true
+            - name: VALKEY_PORT_NAISTEST1
+              valueFrom:
+                secretKeyRef:
+                  key: VALKEY_PORT_NAISTEST1
+                  name: aiven-valkey-naistest1
+                  optional: true
           ports:
             - containerPort: 8080
               name: http
-
 ---
 apiVersion: v1
 kind: Service
@@ -45,7 +132,6 @@ spec:
     aiven: enabled
     app: aiven-demo
   type: ClusterIP
-
 ---
 apiVersion: aiven.nais.io/v1
 kind: AivenApplication
@@ -64,7 +150,6 @@ spec:
       instance: naistest1
     - access: write
       instance: naistest2
-
 ---
 apiVersion: aiven.io/v1alpha1
 kind: Valkey
@@ -79,7 +164,6 @@ spec:
   project: dev-project
   tags:
     app: aiven-demo
-
 ---
 apiVersion: aiven.io/v1alpha1
 kind: Valkey
@@ -94,4 +178,3 @@ spec:
   project: dev-project
   tags:
     app: aiven-demo
-

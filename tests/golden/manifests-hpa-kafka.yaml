@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations: {}
+  labels: {}
+  name: hpa-kafka
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hpa-kafka
+  template:
+    metadata:
+      labels:
+        app: hpa-kafka
+    spec:
+      containers:
+        - image: nginx:1.25
+          name: hpa-kafka
+          ports:
+            - containerPort: 8080
+              name: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  annotations: {}
+  labels: {}
+  name: hpa-kafka
+  namespace: default
+spec:
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+  selector:
+    app: hpa-kafka
+  type: ClusterIP
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: hpa-kafka
+  namespace: default
+spec:
+  maxReplicas: 6
+  metrics:
+    - external:
+        metric:
+          name: kafka_consumergroup_group_lag
+          selector:
+            matchLabels:
+              group: myconsumergroup
+              topic: default.mytopic
+        target:
+          averageValue: "100"
+          type: AverageValue
+      type: External
+  minReplicas: 3
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: hpa-kafka
+

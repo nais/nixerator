@@ -21,6 +21,12 @@ let types = lib.types; in
       default = [ { port = "http"; path = "/metrics"; } ];
       description = "List of scrape endpoints.";
     };
+    containerPort = lib.mkOption {
+      type = types.nullOr types.int;
+      default = null;
+      description = "Optional container port number for metrics when endpoint.port name differs from 'http'.";
+      example = 9090;
+    };
     selector = lib.mkOption {
       type = types.attrs;
       default = { matchLabels = {}; };

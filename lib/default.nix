@@ -151,9 +151,44 @@ rec {
     namespace ? "default",
     minReplicas ? 1,
     maxReplicas,
-    targetCPUUtilizationPercentage ? 80
+    targetCPUUtilizationPercentage ? null,
+    kafka ? null
   }:
-    {
+    let
+      cpuMetric = if targetCPUUtilizationPercentage == null then [] else [
+        {
+          type = "Resource";
+          resource = {
+            name = "cpu";
+            target = {
+              type = "Utilization";
+              averageUtilization = targetCPUUtilizationPercentage;
+            };
+          };
+        }
+      ];
+      kafkaMetric = if kafka == null then [] else [
+        {
+          type = "External";
+          external = {
+            metric = {
+              name = "kafka_consumergroup_group_lag";
+              selector = {
+                matchLabels = {
+                  topic = kafka.topic;
+                  group = kafka.consumerGroup;
+                };
+              };
+            };
+            target = {
+              type = "AverageValue";
+              averageValue = toString kafka.threshold;
+            };
+          };
+        }
+      ];
+      metrics = cpuMetric ++ kafkaMetric;
+    in {
       apiVersion = "autoscaling/v2";
       kind = "HorizontalPodAutoscaler";
       metadata = { inherit name namespace; };
@@ -164,18 +199,7 @@ rec {
           inherit name;
         };
         inherit minReplicas maxReplicas;
-        metrics = [
-          {
-            type = "Resource";
-            resource = {
-              name = "cpu";
-              target = {
-                type = "Utilization";
-                averageUtilization = targetCPUUtilizationPercentage;
-              };
-            };
-          }
-        ];
+        metrics = metrics;
       };
     };
 
@@ -539,6 +563,64 @@ rec {
         { name = "GCP_TEAM_PROJECT_ID"; value = denv.googleTeamProjectId; }
       ] else [];
       envFinal = (ensureEnv cfg.env) ++ baseEnv ++ gcpEnv;
+      # Aiven secret/env/volumes injection
+      sanitizeInst = s:
+        lib.toUpper (lib.replaceStrings ["-" "." ":" "/" " "] ["_" "_" "_" "_" "_"] s);
+      mkSecretEnv = args: {
+        name = args.key;
+        valueFrom = {
+          secretKeyRef = ({ name = args.secretName; key = args.key; }
+            // (lib.optionalAttrs (args.optional or false) { optional = true; }));
+        };
+      };
+      aivenKafkaEnv =
+        let ks = aivenKafka; in
+        if ks == null || (ks.secretName or null) == null then [] else [
+          mkSecretEnv { secretName = ks.secretName; key = "KAFKA_CERTIFICATE"; }
+          mkSecretEnv { secretName = ks.secretName; key = "KAFKA_PRIVATE_KEY"; }
+          mkSecretEnv { secretName = ks.secretName; key = "KAFKA_BROKERS"; }
+          mkSecretEnv { secretName = ks.secretName; key = "KAFKA_SCHEMA_REGISTRY"; }
+          mkSecretEnv { secretName = ks.secretName; key = "KAFKA_SCHEMA_REGISTRY_USER"; }
+          mkSecretEnv { secretName = ks.secretName; key = "KAFKA_SCHEMA_REGISTRY_PASSWORD"; }
+          mkSecretEnv { secretName = ks.secretName; key = "KAFKA_CA"; }
+          mkSecretEnv { secretName = ks.secretName; key = "AIVEN_CA"; optional = true; }
+          mkSecretEnv { secretName = ks.secretName; key = "KAFKA_CREDSTORE_PASSWORD"; }
+        ] ++ (
+          if (ks.mountCredentials or true) then [
+            { name = "KAFKA_CERTIFICATE_PATH"; value = (ks.mountPath or "/var/run/secrets/nais.io/kafka") + "/kafka.crt"; }
+            { name = "KAFKA_PRIVATE_KEY_PATH"; value = (ks.mountPath or "/var/run/secrets/nais.io/kafka") + "/kafka.key"; }
+            { name = "KAFKA_CA_PATH"; value = (ks.mountPath or "/var/run/secrets/nais.io/kafka") + "/ca.crt"; }
+            { name = "KAFKA_KEYSTORE_PATH"; value = (ks.mountPath or "/var/run/secrets/nais.io/kafka") + "/client.keystore.p12"; }
+            { name = "KAFKA_TRUSTSTORE_PATH"; value = (ks.mountPath or "/var/run/secrets/nais.io/kafka") + "/client.truststore.jks"; }
+          ] else []
+        );
+      aivenOpenSearchEnv =
+        let os = aivenOpenSearch; in
+        if os == null || (os.secretName or null) == null then [] else [
+          mkSecretEnv { secretName = os.secretName; key = "OPEN_SEARCH_USERNAME"; }
+          mkSecretEnv { secretName = os.secretName; key = "OPEN_SEARCH_PASSWORD"; }
+          mkSecretEnv { secretName = os.secretName; key = "OPEN_SEARCH_URI"; }
+          mkSecretEnv { secretName = os.secretName; key = "OPEN_SEARCH_HOST"; optional = true; }
+          mkSecretEnv { secretName = os.secretName; key = "OPEN_SEARCH_PORT"; optional = true; }
+          mkSecretEnv { secretName = os.secretName; key = "AIVEN_CA"; optional = true; }
+        ];
+      aivenValkeyEnv = lib.concatMap (v:
+        let sn = v.secretName or null; in
+        if sn == null then [] else (
+          let suffix = sanitizeInst v.instance; in [
+            mkSecretEnv { secretName = sn; key = "VALKEY_USERNAME_" + suffix; }
+            mkSecretEnv { secretName = sn; key = "VALKEY_PASSWORD_" + suffix; }
+            mkSecretEnv { secretName = sn; key = "VALKEY_URI_" + suffix; }
+            mkSecretEnv { secretName = sn; key = "VALKEY_HOST_" + suffix; optional = true; }
+            mkSecretEnv { secretName = sn; key = "VALKEY_PORT_" + suffix; optional = true; }
+            mkSecretEnv { secretName = sn; key = "REDIS_USERNAME_" + suffix; }
+            mkSecretEnv { secretName = sn; key = "REDIS_PASSWORD_" + suffix; }
+            mkSecretEnv { secretName = sn; key = "REDIS_URI_" + suffix; }
+            mkSecretEnv { secretName = sn; key = "REDIS_HOST_" + suffix; optional = true; }
+            mkSecretEnv { secretName = sn; key = "REDIS_PORT_" + suffix; optional = true; }
+          ])
+      ) aivenValkey;
+      aivenEnv = aivenKafkaEnv ++ aivenOpenSearchEnv ++ aivenValkeyEnv;
       hostAliasesK8s = map (h: { hostnames = [ h.host ]; ip = h.ip; }) (cfg.hostAliases or []);
 
       # Optional aiven label when any aiven integration is configured
@@ -552,13 +634,27 @@ rec {
         annotations = annotations // reloaderAnn // ttlAnn;
         image = cfg.image;
         replicas = cfg.replicas;
-        env = envFinal;
+        env = envFinal ++ aivenEnv;
         command = cfg.command or [];
-        ports = [{ name = "http"; containerPort = serviceCfg.targetPort; }];
+        ports = let
+          ep = (if (promCfg.endpoints or []) != [] then lib.head promCfg.endpoints else { port = "http"; path = "/metrics"; });
+          base = [{ name = "http"; containerPort = serviceCfg.targetPort; }];
+          extra = if (promCfg.enable or false) && ((ep.port or "http") != "http") && ((promCfg.containerPort or null) != null) then [ { name = ep.port; containerPort = promCfg.containerPort; } ] else [];
+        in base ++ extra;
         envFrom = lib.filter (x: x != {}) envFrom;
         resources = (if (resourcesCfg.limits or {}) == {} && (resourcesCfg.requests or {}) == {} then null else resourcesCfg);
-        volumeMounts = filesMounts ++ tmpMount;
-        volumes = filesVolumes ++ tmpVol;
+        volumeMounts = let ks = aivenKafka; in (filesMounts ++ tmpMount)
+          ++ (if ks != null && (ks.secretName or null) != null && (ks.mountCredentials or true)
+            then [ { name = "aiven-credentials"; mountPath = ks.mountPath or "/var/run/secrets/nais.io/kafka"; readOnly = true; } ] else []);
+        volumes = let ks = aivenKafka; in (filesVolumes ++ tmpVol)
+          ++ (if ks != null && (ks.secretName or null) != null && (ks.mountCredentials or true)
+            then [ { name = "aiven-credentials"; secret = { secretName = ks.secretName; items = [
+              { key = "KAFKA_CERTIFICATE"; path = "kafka.crt"; }
+              { key = "KAFKA_PRIVATE_KEY"; path = "kafka.key"; }
+              { key = "KAFKA_CA"; path = "ca.crt"; }
+              { key = "client.keystore.p12"; path = "client.keystore.p12"; }
+              { key = "client.truststore.jks"; path = "client.truststore.jks"; }
+            ]; }; } ] else []);
         livenessProbe = livenessProbe;
         readinessProbe = readinessProbe;
         startupProbe = startupProbe;
@@ -568,7 +664,9 @@ rec {
         tolerations = tolerations;
         affinity = affinity;
         hostAliases = hostAliasesK8s;
-        serviceAccountName = if (saCfg.enable or false) then (saCfg.name or name) else null;
+        serviceAccountName = if (saCfg.enable or false)
+          then (if ((saCfg.name or null) != null) then saCfg.name else name)
+          else null;
         imagePullSecrets = imagePullSecrets;
         terminationGracePeriodSeconds = cfg.terminationGracePeriodSeconds or null;
         strategy = strategy;
@@ -592,18 +690,24 @@ rec {
         pathType = ingressCfg.pathType;
         servicePort = serviceCfg.port;
       } // (lib.optionalAttrs (ingressCfg.tls != null) { tls = ingressCfg.tls; })));
-      hpa = lib.optional hpaCfg.enable (mkHPA {
+      hpa = lib.optional hpaCfg.enable (mkHPA ({
         inherit name namespace;
         minReplicas = hpaCfg.minReplicas;
         maxReplicas = hpaCfg.maxReplicas;
-        targetCPUUtilizationPercentage = hpaCfg.targetCPUUtilizationPercentage;
-      });
+      }
+        // (lib.optionalAttrs ((hpaCfg.targetCPUUtilizationPercentage or null) != null) {
+          targetCPUUtilizationPercentage = hpaCfg.targetCPUUtilizationPercentage;
+        })
+        // (lib.optionalAttrs ((hpaCfg.kafka or null) != null) {
+          kafka = hpaCfg.kafka;
+        }))
+      );
       pdb = lib.optional (pdbCfg.enable or false) (mkPDB ({ name = name; namespace = namespace; labels = labelsWithTeam; annotations = annotations; }
         // (lib.optionalAttrs (pdbCfg ? minAvailable) { minAvailable = pdbCfg.minAvailable; })
         // (lib.optionalAttrs (pdbCfg ? maxUnavailable) { maxUnavailable = pdbCfg.maxUnavailable; })));
       serviceAccount = lib.optional (saCfg.enable or false) (mkServiceAccount {
         inherit namespace;
-        name = saCfg.name or name;
+        name = (if ((saCfg.name or null) != null) then saCfg.name else name);
         annotations = saCfg.annotations or {};
         labels = labelsWithTeam;
       });
@@ -663,6 +767,7 @@ rec {
             namespace = namespace;
             labels = labelsWithTeam;
             annotations = annotations;
+            podSelector = { app = name; };
             policyTypes = policyTypes;
             ingress = inboundRules;
             egress = egressRules;
@@ -673,7 +778,7 @@ rec {
         if (promCfg.kind or "PodMonitor") == "PodMonitor" then
           mkPodMonitor {
             inherit name namespace;
-            labels = labelsWithTeam;
+            labels = labelsWithAiven;
             path = ep.path or "/metrics";
             port = ep.port or "http";
             annotations = annotations;
@@ -681,7 +786,7 @@ rec {
         else
           mkServiceMonitor ({
             inherit name namespace;
-            labels = labelsWithTeam;
+            labels = labelsWithAiven;
             annotations = annotations;
             endpoints = [ { port = ep.port or "http"; path = ep.path or "/metrics"; } ];
             selector = { matchLabels = { app = name; }; };

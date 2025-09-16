@@ -13,6 +13,10 @@ OUTPUT=${OUTPUT:-manifests}
 ADV_OUTPUT=${ADV_OUTPUT:-manifests-advanced}
 EVERY_OUTPUT=${EVERY_OUTPUT:-manifests-everything}
 AIVEN_OUTPUT=${AIVEN_OUTPUT:-manifests-aiven}
+AP_SAMENS_OUTPUT=${AP_SAMENS_OUTPUT:-manifests-access-samens}
+AP_EGRESS_OUTPUT=${AP_EGRESS_OUTPUT:-manifests-access-egress}
+HPA_KAFKA_OUTPUT=${HPA_KAFKA_OUTPUT:-manifests-hpa-kafka}
+HPA_ADV_OUTPUT=${HPA_ADV_OUTPUT:-manifests-hpa-advanced}
 
 YQ=${YQ:-yq}
 
@@ -66,5 +70,9 @@ build_and_check "$OUTPUT" "${OUTPUT}.yaml"
 build_and_check "$ADV_OUTPUT" "${ADV_OUTPUT}.yaml"
 build_and_check "$EVERY_OUTPUT" "${EVERY_OUTPUT}.yaml"
 build_and_check "$AIVEN_OUTPUT" "${AIVEN_OUTPUT}.yaml"
+build_and_check "$AP_SAMENS_OUTPUT" "${AP_SAMENS_OUTPUT}.yaml"
+build_and_check "$AP_EGRESS_OUTPUT" "${AP_EGRESS_OUTPUT}.yaml"
+build_and_check "$HPA_KAFKA_OUTPUT" "${HPA_KAFKA_OUTPUT}.yaml"
+build_and_check "$HPA_ADV_OUTPUT" "${HPA_ADV_OUTPUT}.yaml"
 
 echo "All tests passed."
