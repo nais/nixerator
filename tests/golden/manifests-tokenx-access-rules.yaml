@@ -43,6 +43,26 @@ spec:
     app: tokenx-access-rules
   type: ClusterIP
 ---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  annotations: {}
+  labels: {}
+  name: tokenx-access-rules-access
+  namespace: default
+spec:
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: default
+      ports: []
+  podSelector:
+    matchLabels:
+      app: tokenx-access-rules
+  policyTypes:
+    - Ingress
+---
 apiVersion: nais.io/v1
 kind: Jwker
 metadata:
@@ -63,4 +83,3 @@ spec:
     Outbound:
       Rules: []
   SecretName: tokenx-tokenx-access-rules
-

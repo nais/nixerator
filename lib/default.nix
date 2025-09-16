@@ -1089,6 +1089,50 @@ rec {
           }
         ] else [];
 
+      # Wonderwall for Login helper
+      wwLoginInit = if ((cfg.login or { enable = false; }).enable or false) then (
+        let
+          lg = cfg.login;
+          ing = ingressCfg;
+          scheme = "https://";
+          ingressUrl = if (ing.enable or false) && (ing.host or null) != null then "${scheme}${ing.host}" else "";
+          portStr = toString serviceCfg.targetPort;
+          autoIgnored = lib.concatStringsSep "," ((lg.enforce or { enabled = false; excludePaths = []; }).excludePaths or []);
+        in [
+          {
+            name = "wonderwall";
+            image = "ghcr.io/nais/wonderwall:latest";
+            imagePullPolicy = "IfNotPresent";
+            env = [
+              { name = "WONDERWALL_OPENID_PROVIDER"; value = lg.provider or "idporten"; }
+              { name = "WONDERWALL_INGRESS"; value = ingressUrl; }
+              { name = "WONDERWALL_UPSTREAM_IP"; valueFrom.fieldRef.fieldPath = "status.podIP"; }
+              { name = "WONDERWALL_UPSTREAM_PORT"; value = portStr; }
+              { name = "WONDERWALL_BIND_ADDRESS"; value = "0.0.0.0:7564"; }
+              { name = "WONDERWALL_METRICS_BIND_ADDRESS"; value = "0.0.0.0:7565"; }
+              { name = "WONDERWALL_PROBE_BIND_ADDRESS"; value = "0.0.0.0:7566"; }
+            ]
+            ++ (lib.optional (((lg.enforce or { enabled = false; }).enabled or false)) { name = "WONDERWALL_AUTO_LOGIN"; value = "true"; })
+            ++ (lib.optional (((lg.enforce or { enabled = false; }).enabled or false) && autoIgnored != "") { name = "WONDERWALL_AUTO_LOGIN_IGNORE_PATHS"; value = autoIgnored; });
+            envFrom = [
+              { secretRef = { name = "login-global-config"; }; }
+              { secretRef = { name = "login-config-" + name; }; }
+            ];
+            ports = [
+              { containerPort = 7564; protocol = "TCP"; name = "wonderwall"; }
+              { containerPort = 7565; protocol = "TCP"; name = "ww-metrics"; }
+              { containerPort = 7566; protocol = "TCP"; name = "ww-probe"; }
+            ];
+            securityContext = {
+              allowPrivilegeEscalation = false;
+              readOnlyRootFilesystem = true;
+              runAsNonRoot = true;
+              capabilities.drop = [ "ALL" ];
+              seccompProfile.type = "RuntimeDefault";
+            };
+          }
+        ]) else [];
+
       # Wonderwall for IDPorten
       wwIdpInit = let sc = idpCfg.sidecar or { enabled = false; }; in
         if (sc.enabled or false) then [
@@ -1173,7 +1217,7 @@ rec {
               { key = "client.truststore.jks"; path = "client.truststore.jks"; }
             ]; }; } ] else [])
           ++ (let gen = feCfg.generatedConfig or null; in lib.optional (gen != null && (feCfg.telemetryUrl or null) != null) { name = "frontend-config"; configMap = { name = "${name}-frontend-config"; }; });
-        initContainers = secureLogsInitContainers ++ wwInit ++ wwIdpInit
+        initContainers = secureLogsInitContainers ++ wwInit ++ wwIdpInit ++ wwLoginInit
           ++ (if (texasCfg.enable or false) && ((azureCfg.application.enabled or false) || (maskinCfg.enable or false) || (tokenxCfg.enable or false)) then [
             {
               name = "texas";

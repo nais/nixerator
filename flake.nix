@@ -39,6 +39,7 @@
             appMaskinporten
             appTexas
             appCABundle
+            appLogin
             appWebproxy
             appLeaderElection
             appIntegrations
@@ -83,6 +84,7 @@
           appMaskinporten = import ./modules/ext/maskinporten.nix;
           appTexas = import ./modules/ext/texas.nix;
           appCABundle = import ./modules/ext/cabundle.nix;
+          appLogin = import ./modules/ext/login.nix;
           appWebproxy = import ./modules/ext/webproxy.nix;
           appLeaderElection = import ./modules/ext/leaderelection.nix;
           appIntegrations = import ./modules/ext/integrations.nix;
@@ -169,6 +171,7 @@
               appMaskinporten
               appTexas
               appCABundle
+              appLogin
               appWebproxy
               appLeaderElection
               appIntegrations
@@ -348,6 +351,14 @@
           packages.manifests-cabundle = let
             eval = nlib.evalAppModules {
               modules = [ self.nixosModules.app self.nixosModules.appCABundle (import ./examples/app-cabundle.nix) ];
+              specialArgs = { inherit lib; };
+            };
+          in pkgs.writeText "manifest.yaml" eval.yaml;
+
+          # Login helper example
+          packages.manifests-login = let
+            eval = nlib.evalAppModules {
+              modules = [ self.nixosModules.app self.nixosModules.appLogin (import ./examples/app-login.nix) ];
               specialArgs = { inherit lib; };
             };
           in pkgs.writeText "manifest.yaml" eval.yaml;
