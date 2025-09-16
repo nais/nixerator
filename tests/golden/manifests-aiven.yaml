@@ -1,0 +1,97 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations: {}
+  labels:
+    aiven: enabled
+  name: aiven-demo
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      aiven: enabled
+      app: aiven-demo
+  strategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        aiven: enabled
+        app: aiven-demo
+    spec:
+      containers:
+        - image: nginx:1.25
+          name: aiven-demo
+          ports:
+            - containerPort: 8080
+              name: http
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  annotations: {}
+  labels:
+    aiven: enabled
+  name: aiven-demo
+  namespace: default
+spec:
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+  selector:
+    aiven: enabled
+    app: aiven-demo
+  type: ClusterIP
+
+---
+apiVersion: aiven.nais.io/v1
+kind: AivenApplication
+metadata:
+  annotations: {}
+  labels:
+    aiven: enabled
+  name: aiven-demo
+  namespace: default
+spec:
+  openSearch:
+    access: read
+    instance: opensearch-default-naistest
+  valkey:
+    - access: read
+      instance: naistest1
+    - access: write
+      instance: naistest2
+
+---
+apiVersion: aiven.io/v1alpha1
+kind: Valkey
+metadata:
+  annotations: {}
+  labels:
+    aiven: enabled
+  name: valkey-default-naistest1
+  namespace: default
+spec:
+  plan: startup-4
+  project: dev-project
+  tags:
+    app: aiven-demo
+
+---
+apiVersion: aiven.io/v1alpha1
+kind: Valkey
+metadata:
+  annotations: {}
+  labels:
+    aiven: enabled
+  name: valkey-default-naistest2
+  namespace: default
+spec:
+  plan: startup-4
+  project: dev-project
+  tags:
+    app: aiven-demo
+

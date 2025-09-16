@@ -12,7 +12,7 @@ DOC := nixerator-options.org
 
 .PHONY: help all build print \
         show fmt check dev manifests \
-        apply apply-result docs print-docs print-json test update-golden clean
+        docs print-docs print-json test update-golden clean
 
 help: ## Show this help.
 	@awk 'BEGIN {FS = ":.*##"; printf "Available targets\n-----------------\n"} /^[a-zA-Z0-9_.-]+:.*?##/ { printf "  %-24s %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
@@ -55,13 +55,6 @@ dev: ## Enter the dev shell.
 manifests: build ## Copy built YAML to ./manifests.yaml.
 	cp -f $(RESULT) $(MANIFEST)
 	@echo "Wrote $(MANIFEST)"
-
-
-apply: manifests ## Apply manifests.yaml with kubectl.
-	kubectl apply -f $(MANIFEST)
-
-apply-result: build ## Apply ./result directly with kubectl.
-	kubectl apply -f $(RESULT)
 
 docs: ## Build Org docs and write to ./$(DOC) (DOC_OUTPUT=$(DOC_OUTPUT)).
 	nix build $(FLAKE)#$(DOC_OUTPUT)

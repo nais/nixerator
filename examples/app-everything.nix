@@ -135,5 +135,14 @@
 
     # Host aliases
     hostAliases = [ { host = "db.internal"; ip = "10.0.0.10"; } ];
+
+    # Aiven integrations (demo)
+    # aiven = {
+    #   enable = true;
+    #   project = "dev-project";
+    #   manageInstances = true;
+    #   openSearch = { instance = "naistest"; access = "read"; };
+    #   valkey = [ { instance = "naistest1"; access = "read"; createInstance = true; } ];
+    # };
   };
 }

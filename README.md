@@ -10,7 +10,7 @@ Simple consumption (as a library)
 - In your flake, add input `nixerator` and build from a plain attrset via the canonical builder:
   - `let eval = nixerator.lib.buildApp { app = { name = "myapp"; image = "..."; service = { enable = true; }; }; }; in pkgs.writeText "manifest.yaml" eval.yaml`
 - The builder returns a structured result with `cfg`, `options`, `resources`, and `yaml`.
-- See `examples/` for ready-to-copy module configs.
+- See `templates/basic/flake.nix` for a minimal consumer flake and `templates/kitchen-sink/flake.nix` for a full-feature consumer you can copy into your repo.
 
 Modules workflow (recommended)
 - Evaluate module to manifests: `nix build .#manifests && cat result`
@@ -28,6 +28,9 @@ What’s inside
   - New: `accessPolicy` for high-level inbound/outbound rules that render a NetworkPolicy named `${app}-access`.
 - `examples/app-basic.nix` is a module config demonstrating the core interface.
 - `examples/app-extended.nix` demonstrates the extended interface (PDB, SA, ConfigMap, NetworkPolicy, ServiceMonitor).
+- Consumer flakes you can copy:
+  - `templates/basic/flake.nix` (basic: Deployment/Service/Ingress/HPA/Secrets, etc.)
+  - `templates/kitchen-sink/flake.nix` (kitchen-sink: includes accessPolicy, fqdnPolicy, pod security, probes, filesFrom, scheduling, prometheus, etc.)
 
 Recently added toward Naiserator parity
 - Probes: `probes.liveness|readiness|startup` (HTTP, timing fields, optional port).
@@ -49,6 +52,12 @@ Recently added toward Naiserator parity
 - Team label default: `labelsDefaults.addTeam = true` adds `team = namespace` on resources.
 - Scheduling hooks: `scheduling.antiAffinity` (required|preferred, topologyKey), `scheduling.tolerations` list.
 - Prometheus: `prometheus.enable = true; prometheus.kind = "PodMonitor"|"ServiceMonitor"; prometheus.endpoints = [ { port = "http"; path = "/metrics"; } ];`.
+- Aiven (alpha): `aiven.enable = true;` with support for `aiven.kafka.pool`, `aiven.openSearch.{instance,access}`, and `aiven.valkey = [ { instance, access, plan, createInstance } ]`.
+  - Emits `AivenApplication` (aiven.nais.io/v1) when Kafka/OpenSearch/Valkey is configured.
+  - Emits `Stream` (kafka.nais.io/v1) when `aiven.kafka.streams = true`.
+  - Optionally emits `Valkey` (aiven.io/v1alpha1) resources when `aiven.manageInstances = true` and `aiven.project` is set.
+  - Adds label `aiven=enabled` on pod template to match Naiserator behavior.
+  - Optionally append `aiven.rangeCIDR` to `accessPolicy.outbound.allowedCIDRs` when egress is restricted.
 
 Docs generation
 - `lib.orgDocsFromOptions` and `lib.orgDocsFromEval` turn the evaluated options tree into an Emacs Org file listing option names, types, defaults, and descriptions.

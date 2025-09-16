@@ -326,6 +326,57 @@ rec {
       };
     };
 
+  # AivenApplication (aiven.nais.io/v1)
+  mkAivenApplication = {
+    name,
+    namespace ? "default",
+    labels ? {},
+    annotations ? {},
+    spec ? {}
+  }:
+    {
+      apiVersion = "aiven.nais.io/v1";
+      kind = "AivenApplication";
+      metadata = { inherit name namespace labels annotations; };
+      spec = spec;
+    };
+
+  # Aiven Valkey (aiven.io/v1alpha1)
+  mkAivenValkey = {
+    name,
+    namespace ? "default",
+    project,
+    plan ? "startup-4",
+    appTag ? null,
+    labels ? {},
+    annotations ? {},
+  }:
+    {
+      apiVersion = "aiven.io/v1alpha1";
+      kind = "Valkey";
+      metadata = { inherit name namespace labels annotations; };
+      spec = {
+        project = project;
+        plan = plan;
+        tags = (lib.optionalAttrs (appTag != null) { app = appTag; });
+      };
+    };
+
+  # Kafka Stream (kafka.nais.io/v1)
+  mkKafkaStream = {
+    name,
+    namespace ? "default",
+    pool,
+    labels ? {},
+    annotations ? {}
+  }:
+    {
+      apiVersion = "kafka.nais.io/v1";
+      kind = "Stream";
+      metadata = { inherit name namespace labels annotations; };
+      spec = { inherit pool; };
+    };
+
   renderManifests = manifests:
     lib.concatStringsSep "\n---\n" (map toYaml manifests);
 
@@ -355,6 +406,15 @@ rec {
       promCfg = cfg.prometheus or { enable = false; };
       schedCfg = cfg.scheduling or {};
       imagePullSecrets = cfg.imagePullSecrets or [];
+      # Aiven integration
+      aivenCfg = cfg.aiven or { enable = false; };
+      aivenEnabled = aivenCfg.enable or false;
+      aivenRange = aivenCfg.rangeCIDR or null;
+      aivenKafka = aivenCfg.kafka or null;
+      aivenOpenSearch = aivenCfg.openSearch or null;
+      aivenValkey = aivenCfg.valkey or [];
+      aivenProject = aivenCfg.project or null;
+      aivenManageInstances = aivenCfg.manageInstances or false;
       # Scheduling: tolerations and anti-affinity
       tolerations = schedCfg.tolerations or [];
       affinity = let aa = schedCfg.antiAffinity or { enable = false; }; in
@@ -481,10 +541,14 @@ rec {
       envFinal = (ensureEnv cfg.env) ++ baseEnv ++ gcpEnv;
       hostAliasesK8s = map (h: { hostnames = [ h.host ]; ip = h.ip; }) (cfg.hostAliases or []);
 
+      # Optional aiven label when any aiven integration is configured
+      anyAiven = aivenEnabled && ((aivenKafka != null) || (aivenOpenSearch != null) || (aivenValkey != []));
+      labelsWithAiven = labelsWithTeam // (lib.optionalAttrs anyAiven { aiven = "enabled"; });
+
       deployment = mkDeployment {
         name = name;
         namespace = namespace;
-        labels = labelsWithTeam // ttlLabel;
+        labels = labelsWithAiven // ttlLabel;
         annotations = annotations // reloaderAnn // ttlAnn;
         image = cfg.image;
         replicas = cfg.replicas;
@@ -512,7 +576,7 @@ rec {
       service = lib.optional serviceCfg.enable (mkService {
         name = name;
         namespace = namespace;
-        labels = labelsWithTeam;
+        labels = labelsWithAiven;
         annotations = annotations;
         port = serviceCfg.port;
         targetPort = serviceCfg.targetPort;
@@ -521,7 +585,7 @@ rec {
       ingress = lib.optional (ingressCfg.enable && ingressCfg.host != null) (mkIngress ({
         name = name;
         namespace = namespace;
-        labels = labelsWithTeam;
+        labels = labelsWithAiven;
         annotations = annotations;
         host = ingressCfg.host;
         path = ingressCfg.path;
@@ -578,7 +642,7 @@ rec {
           outbound = apCfg.outbound or {};
           allowAll = outbound.allowAll or true;
           obNs = outbound.allowedNamespaces or [];
-          obCidrs = outbound.allowedCIDRs or [];
+          obCidrs = (outbound.allowedCIDRs or []) ++ (if (aivenRange != null && aivenRange != "") then [ aivenRange ] else []);
           obPorts = outbound.allowedPorts or [];
           obAllowDNS = outbound.allowDNS or false;
           egressRules = if allowAll then [] else (
@@ -623,11 +687,54 @@ rec {
             selector = { matchLabels = { app = name; }; };
           })
       );
+      # AivenApplication (if any aiven integration configured)
+      aivenAppSpec = {}
+        // (lib.optionalAttrs (aivenKafka != null && ((aivenKafka.pool or null) != null) && aivenKafka.pool != "") {
+          kafka = { pool = aivenKafka.pool; };
+        })
+        // (lib.optionalAttrs (aivenOpenSearch != null && ((aivenOpenSearch.instance or null) != null) && aivenOpenSearch.instance != "") {
+          openSearch = {
+            instance = "opensearch-${namespace}-${aivenOpenSearch.instance}";
+            access = aivenOpenSearch.access or "read";
+          };
+        })
+        // (lib.optionalAttrs (aivenValkey != []) {
+          valkey = map (v: { instance = v.instance; access = v.access or "read"; }) aivenValkey;
+        });
+      aivenApplication = lib.optional (anyAiven) (mkAivenApplication {
+        inherit name namespace;
+        labels = labelsWithAiven;
+        annotations = annotations;
+        spec = aivenAppSpec;
+      });
+
+      # Optional creation of Valkey service instances
+      valkeyResources = lib.concatMap (v:
+        if aivenManageInstances && (aivenProject != null && aivenProject != "")
+        then [ (mkAivenValkey {
+          name = "valkey-${namespace}-${v.instance}";
+          namespace = namespace;
+          project = aivenProject;
+          plan = v.plan or "startup-4";
+          appTag = name;
+          labels = labelsWithAiven;
+          annotations = annotations;
+        }) ]
+        else []
+      ) aivenValkey;
+
+      kafkaStream = lib.optional (aivenKafka != null && (aivenKafka.streams or false) && ((aivenKafka.pool or null) != null) && aivenKafka.pool != "") (mkKafkaStream {
+        inherit name namespace;
+        pool = aivenKafka.pool;
+        labels = labelsWithAiven;
+        annotations = annotations;
+      });
+
       fqdnPolicy = lib.optional ((fqdnCfg.enable or false) || ((apCfg.enable or false) && fqdnFromAP != [])) (mkFQDNNetworkPolicy {
         name = "${name}-fqdn";
         appName = name;
         namespace = namespace;
-        labels = labelsWithTeam;
+        labels = labelsWithAiven;
         annotations = annotations;
         rules = fqdnRulesCombined;
       });
@@ -645,6 +752,9 @@ rec {
         ++ serviceAccount
         ++ networkPolicy
         ++ accessNetworkPolicy
+        ++ aivenApplication
+        ++ kafkaStream
+        ++ valkeyResources
         ++ fqdnPolicy
         ++ serviceMonitor
         ++ secrets

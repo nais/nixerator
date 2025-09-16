@@ -12,6 +12,7 @@ RESULT="result"
 OUTPUT=${OUTPUT:-manifests}
 ADV_OUTPUT=${ADV_OUTPUT:-manifests-advanced}
 EVERY_OUTPUT=${EVERY_OUTPUT:-manifests-everything}
+AIVEN_OUTPUT=${AIVEN_OUTPUT:-manifests-aiven}
 
 YQ=${YQ:-yq}
 
@@ -64,5 +65,6 @@ build_and_check() {
 build_and_check "$OUTPUT" "${OUTPUT}.yaml"
 build_and_check "$ADV_OUTPUT" "${ADV_OUTPUT}.yaml"
 build_and_check "$EVERY_OUTPUT" "${EVERY_OUTPUT}.yaml"
+build_and_check "$AIVEN_OUTPUT" "${AIVEN_OUTPUT}.yaml"
 
 echo "All tests passed."

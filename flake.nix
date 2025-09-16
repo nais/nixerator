@@ -16,6 +16,7 @@
         lib = nixeratorLib // (let
           baseModules = with self.nixosModules; [
             app
+            appAiven
             appPDB
             appServiceAccount
             appConfigMap
@@ -44,6 +45,7 @@
         # Expose the app module for consumers
         nixosModules = {
           app = import ./modules/app.nix;
+          appAiven = import ./modules/ext/aiven.nix;
           appPDB = import ./modules/ext/pdb.nix;
           appServiceAccount = import ./modules/ext/serviceaccount.nix;
           appConfigMap = import ./modules/ext/configmap.nix;
@@ -88,6 +90,7 @@
             eval = nlib.evalAppModules {
               modules = [
                 self.nixosModules.app
+                self.nixosModules.appAiven
                 self.nixosModules.appPDB
                 self.nixosModules.appServiceAccount
                 self.nixosModules.appConfigMap
@@ -113,6 +116,7 @@
           packages.docs = let
             docModules = with self.nixosModules; [
               app
+              appAiven
               appPDB
               appServiceAccount
               appConfigMap
@@ -142,5 +146,12 @@
           };
 
           formatter = pkgs.nixpkgs-fmt;
+          # Aiven example
+          packages.manifests-aiven = let
+            eval = nlib.evalAppModules {
+              modules = [ self.nixosModules.app self.nixosModules.appAiven (import ./examples/app-aiven.nix) ];
+              specialArgs = { inherit lib; };
+            };
+          in pkgs.writeText "manifest.yaml" eval.yaml;
         });
 }
