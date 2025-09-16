@@ -4,6 +4,13 @@ Quick start
 - Prereqs: Nix with flakes enabled.
 - Build example manifests (application module): `nix build .#manifests-basic && echo && cat result`
 
+Simple consumption (as a library)
+- In your flake, add input `nixerator` and build YAML from a plain attrset:
+  - `pkgs.writeText "manifest.yaml" (nixerator.lib.simple.yamlFromApp { name = "myapp"; image = "..."; service.enable = true; })`
+- Or get a structured result (resources + yaml):
+  - `nixerator.lib.simple.eval { app = { ... }; }`
+- See `templates/basic/` for a ready-to-copy consumer flake.
+
 Modules workflow (recommended)
 - Evaluate module to manifests: `nix build .#manifests-module-basic && cat result`
 - Extended resources: `nix build .#manifests-module-extended && cat result`
@@ -12,7 +19,7 @@ Modules workflow (recommended)
 The module lives at `nixosModules.app` and can be evaluated with `lib.evalModules`. Use `lib.evalAppModules { modules = [ self.nixosModules.app yourModule ]; }` to get `cfg`, `options`, `resources`, and `yaml`.
 
 What’s inside
-- `flake.nix` exposes the typed application module and builds `manifests-basic` by evaluating it. It also exposes extension modules and an extended example.
+- `flake.nix` exposes the typed application module and builds `manifests-basic` by evaluating it. It also exposes extension modules and an extended example, plus a simple consumer entry under `lib.simple`.
 - `lib/default.nix` provides helpers: `mkDeployment`, `mkService`, `mkIngress`, `mkHPA`, `mkSecret`, `mkPDB`, `mkServiceAccount`, `mkConfigMap`, `mkNetworkPolicy`, `mkServiceMonitor`, `mkApp`, `evalAppModules`, and `renderManifests`.
 - `modules/app.nix` defines the core application interface (typed NixOS-style module).
 - `modules/ext/*.nix` add resourcecreator-style features: `pdb`, `serviceAccount`, `configMaps`, `networkPolicy`, `prometheus`.

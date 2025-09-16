@@ -13,7 +13,37 @@
     in
       {
         # Expose library functions as a flake lib
-        lib = nixeratorLib;
+        lib = nixeratorLib // {
+          # Simple, consumer-friendly entrypoints that bundle our modules
+          simple = let
+            baseModules = with self.nixosModules; [
+              app
+              appPDB
+              appServiceAccount
+              appConfigMap
+              appNetworkPolicy
+              appPrometheus
+            ];
+            mkConfigModule = appCfg: { lib, ... }: { config.app = appCfg; };
+          in {
+            # Evaluate using bundled modules + optional extras
+            eval = { app, extraModules ? [], specialArgs ? {} }:
+              let
+                eval = nixeratorLib.evalAppModules {
+                  modules = baseModules ++ extraModules ++ [ (mkConfigModule app) ];
+                  specialArgs = specialArgs // { lib = nixpkgs.lib; };
+                };
+              in eval;
+
+            # Return YAML from a simple app attrset
+            yamlFromApp = app:
+              (self.lib.simple.eval { inherit app; }).yaml;
+
+            # Return resources attrset from a simple app attrset
+            resourcesFromApp = app:
+              (self.lib.simple.eval { inherit app; }).resources;
+          };
+        };
 
         # Expose the app module for consumers
         nixosModules = {
