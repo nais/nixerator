@@ -13,8 +13,6 @@ OUTPUT=${OUTPUT:-manifests-basic}
 MODULE_OUTPUT=${MODULE_OUTPUT:-manifests-module-basic}
 
 YQ=${YQ:-yq}
-KUBECONFORM=${KUBECONFORM:-kubeconform}
-KUBECONFORM_FLAGS=${KUBECONFORM_FLAGS:-"-strict -ignore-missing-schemas"}
 
 mkdir -p "$GOLDEN_DIR"
 
@@ -59,16 +57,10 @@ build_and_check() {
 
   compare_or_update "$built_yaml" "$golden_file"
 
-  if command -v "$KUBECONFORM" >/dev/null 2>&1; then
-    echo "Validating with kubeconform: $pkg"
-    "$KUBECONFORM" $KUBECONFORM_FLAGS -summary -output pretty -exit-on-error - < "$built_yaml"
-  else
-    echo "kubeconform not found; skipping schema validation"
-  fi
+  # Schema validation is covered by flake checks (kubeconform-*).
 }
 
 build_and_check "$OUTPUT" "${OUTPUT}.yaml"
 build_and_check "$MODULE_OUTPUT" "${MODULE_OUTPUT}.yaml"
 
 echo "All tests passed."
-

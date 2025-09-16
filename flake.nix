@@ -70,5 +70,22 @@
             diff -u golden.yaml built.yaml || { echo "Golden mismatch"; exit 1; }
             cp built.yaml "$out"
           '';
+
+          # Kubeconform checks (offline-friendly flags)
+          checks.kubeconform-basic = pkgs.runCommand "kubeconform-basic" {
+            buildInputs = [ pkgs.kubeconform ];
+            src = self.packages.${system}.manifests-basic;
+          } ''
+            set -euo pipefail
+            kubeconform -strict -ignore-missing-schemas -summary -output pretty -exit-on-error - < "$src" > "$out"
+          '';
+
+          checks.kubeconform-module-basic = pkgs.runCommand "kubeconform-module-basic" {
+            buildInputs = [ pkgs.kubeconform ];
+            src = self.packages.${system}.manifests-module-basic;
+          } ''
+            set -euo pipefail
+            kubeconform -strict -ignore-missing-schemas -summary -output pretty -exit-on-error - < "$src" > "$out"
+          '';
         });
 }

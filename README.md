@@ -22,14 +22,14 @@ Docs generation
 - `lib.orgDocsFromOptions` and `lib.orgDocsFromEval` turn the evaluated options tree into an Emacs Org file listing option names, types, defaults, and descriptions.
 
 Testing and goldens
-- Run tests: `make test` (builds manifests via flake, diffs against `tests/golden/*.yaml`, runs kubeconform if installed).
+- Run tests: `make test` (builds manifests via flake and diffs against `tests/golden/*.yaml`).
 - Update goldens: `make update-golden` (or `UPDATE_GOLDEN=1 tests/run.sh`).
-- CI-friendly check: `nix flake check` includes a golden comparison for `manifests-basic`.
-- Dev shell includes `kubeconform` and `yq` for local validation.
+- Flake checks: `nix flake check` runs golden comparison and kubeconform validation for both `manifests-basic` and `manifests-module-basic`.
+- Dev shell includes `kubeconform` and `yq` for local validation if you want to run it manually.
 
 Notes on kubeconform
-- The Makefile target uses `-strict -ignore-missing-schemas` by default; tune with `KUBECONFORM_FLAGS`.
-- In pure Nix `checks`, network is unavailable; schema fetches are skipped. Prefer running `make kubeconform` locally or in CI with network access.
+- Flake checks use offline-friendly flags: `-strict -ignore-missing-schemas`.
+- For stricter validation with network access, run kubeconform manually in the dev shell or configure CI to allow schema fetching.
 
 Use the library in another flake
 - Add input: `nixerator.url = "github:YOUR_ORG/nixerator"` (or a local path while iterating).
