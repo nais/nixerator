@@ -14,6 +14,11 @@
       {
         # Expose library functions as a flake lib
         lib = nixeratorLib;
+
+        # Expose the app module for consumers
+        nixosModules = {
+          app = import ./modules/app.nix;
+        };
       }
       // flake-utils.lib.eachDefaultSystem (system:
         let
@@ -46,6 +51,20 @@
               })
             ]);
 
+          # Example: evaluate NixOS-style modules to manifests
+          packages.manifests-module-basic = let
+            eval = nlib.evalAppModules {
+              modules = [ self.nixosModules.app (import ./examples/app-basic.nix) ];
+              specialArgs = { inherit lib; };
+            };
+          in pkgs.writeText "manifest.yaml" eval.yaml;
+
+          # Generate Emacs Org docs for the module options
+          packages.docs-org = let
+            eval = lib.evalModules { modules = [ self.nixosModules.app ]; specialArgs = { inherit lib; }; };
+            org = nlib.orgDocsFromEval eval;
+          in pkgs.writeText "nixerator-options.org" org;
+
           devShells.default = pkgs.mkShell {
             buildInputs = [
               pkgs.nixpkgs-fmt
@@ -56,4 +75,3 @@
           formatter = pkgs.nixpkgs-fmt;
         });
 }
-

@@ -162,6 +162,105 @@ rec {
   renderManifests = manifests:
     lib.concatStringsSep "\n---\n" (map toYaml manifests);
 
+  # Build resources from the evaluated module config under cfg.app
+  fromAppConfig = cfg:
+    let
+      name = cfg.name;
+      namespace = cfg.namespace;
+      labels = cfg.labels or {};
+      annotations = cfg.annotations or {};
+      serviceCfg = cfg.service;
+      ingressCfg = cfg.ingress;
+      hpaCfg = cfg.hpa;
+      secretsCfg = cfg.secrets or {};
+      deployment = mkDeployment {
+        inherit name namespace labels annotations;
+        image = cfg.image;
+        replicas = cfg.replicas;
+        env = cfg.env;
+        ports = [{ name = "http"; containerPort = serviceCfg.targetPort; }];
+      };
+      service = lib.optional serviceCfg.enable (mkService {
+        inherit name namespace labels annotations;
+        port = serviceCfg.port;
+        targetPort = serviceCfg.targetPort;
+        type = serviceCfg.type;
+      });
+      ingress = lib.optional (ingressCfg.enable && ingressCfg.host != null) (mkIngress ({
+        inherit name namespace labels annotations;
+        host = ingressCfg.host;
+        path = ingressCfg.path;
+        pathType = ingressCfg.pathType;
+        servicePort = serviceCfg.port;
+      } // (lib.optionalAttrs (ingressCfg.tls != null) { tls = ingressCfg.tls; })));
+      hpa = lib.optional hpaCfg.enable (mkHPA {
+        inherit name namespace;
+        minReplicas = hpaCfg.minReplicas;
+        maxReplicas = hpaCfg.maxReplicas;
+        targetCPUUtilizationPercentage = hpaCfg.targetCPUUtilizationPercentage;
+      });
+      secrets = lib.mapAttrsToList (n: s: mkSecret ({
+        name = n;
+        inherit namespace;
+        type = s.type;
+      } // (lib.optionalAttrs (s.data != {}) { data = s.data; })
+        // (lib.optionalAttrs (s.stringData != {}) { stringData = s.stringData; }))) secretsCfg;
+      res = [ deployment ]
+        ++ service
+        ++ ingress
+        ++ hpa
+        ++ secrets;
+    in {
+      deployment = deployment;
+      service = if service == [] then null else lib.head service;
+      ingress = if ingress == [] then null else lib.head ingress;
+      hpa = if hpa == [] then null else lib.head hpa;
+      secrets = secrets;
+      manifests = res;
+      yaml = renderManifests res;
+    };
+
+  # Evaluate modules and return config + resources
+  evalAppModules = { modules, specialArgs ? {} }:
+    let
+      eval = lib.evalModules { inherit modules; specialArgs = specialArgs // { inherit lib; }; };
+      cfg = eval.config.app;
+      built = fromAppConfig cfg;
+    in {
+      inherit cfg;
+      inherit (eval) options;
+      resources = built;
+      yaml = built.yaml;
+    };
+
+  # Generate an Emacs Org document from an options tree (e.g., eval.options.app)
+  orgDocsFromOptions = opts:
+    let
+      show = v:
+        if v == null then "null"
+        else if lib.isString v then v
+        else builtins.toJSON v;
+      flatten = prefix: as:
+        lib.concatLists (lib.mapAttrsToList (n: v:
+          let path = if prefix == "" then n else "${prefix}.${n}"; in
+          if (lib.isAttrs v && (v ? _type && v._type == "option")) then [ { inherit path; opt = v; } ]
+          else if lib.isAttrs v then flatten path v
+          else []
+        ) as);
+      format = { path, opt }:
+        let
+          tname = if opt ? type && opt.type ? name then opt.type.name else "";
+          def = if opt ? default then show opt.default else if opt ? defaultText then opt.defaultText else "-";
+          ex = if opt ? example then show opt.example else null;
+          desc = if opt ? description then opt.description else "";
+          exLine = if ex == null then "" else "\n  - Example: " + ex;
+        in "* ${path}\n  - Type: ${tname}\n  - Default: ${def}\n  - Description: ${desc}" + exLine;
+      body = lib.concatStringsSep "\n\n" (map format (flatten "" opts));
+    in "#+TITLE: Nixerator App Module Options\n\n" + body + "\n";
+
+  # Convenience: generate docs from full eval (takes eval.options.app)
+  orgDocsFromEval = eval: orgDocsFromOptions eval.options.app;
+
   mkApp = {
     name,
     namespace ? "default",
@@ -203,4 +302,3 @@ rec {
       yaml = renderManifests all;
     };
 }
-
