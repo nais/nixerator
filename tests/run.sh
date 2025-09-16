@@ -38,6 +38,7 @@ AZURE_PREAUTH_OUTPUT=${AZURE_PREAUTH_OUTPUT:-manifests-azure-preauth}
 IDPORTEN_OUTPUT=${IDPORTEN_OUTPUT:-manifests-idporten}
 TOKENX_OUTPUT=${TOKENX_OUTPUT:-manifests-tokenx}
 TOKENX_ACCESS_OUTPUT=${TOKENX_ACCESS_OUTPUT:-manifests-tokenx-access}
+TOKENX_ACCESS_RULES_OUTPUT=${TOKENX_ACCESS_RULES_OUTPUT:-manifests-tokenx-access-rules}
 MASKINPORTEN_OUTPUT=${MASKINPORTEN_OUTPUT:-manifests-maskinporten}
 TEXAS_OUTPUT=${TEXAS_OUTPUT:-manifests-texas}
 CABUNDLE_OUTPUT=${CABUNDLE_OUTPUT:-manifests-cabundle}
@@ -119,6 +120,7 @@ build_and_check "$AZURE_PREAUTH_OUTPUT" "${AZURE_PREAUTH_OUTPUT}.yaml"
 build_and_check "$IDPORTEN_OUTPUT" "${IDPORTEN_OUTPUT}.yaml"
 build_and_check "$TOKENX_OUTPUT" "${TOKENX_OUTPUT}.yaml"
 build_and_check "$TOKENX_ACCESS_OUTPUT" "${TOKENX_ACCESS_OUTPUT}.yaml"
+build_and_check "$TOKENX_ACCESS_RULES_OUTPUT" "${TOKENX_ACCESS_RULES_OUTPUT}.yaml"
 build_and_check "$MASKINPORTEN_OUTPUT" "${MASKINPORTEN_OUTPUT}.yaml"
 build_and_check "$TEXAS_OUTPUT" "${TEXAS_OUTPUT}.yaml"
 build_and_check "$CABUNDLE_OUTPUT" "${CABUNDLE_OUTPUT}.yaml"

@@ -1,0 +1,104 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations: {}
+  labels:
+    azure: enabled
+  name: azure-preauth-adv
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: azure-preauth-adv
+      azure: enabled
+  strategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: azure-preauth-adv
+        azure: enabled
+    spec:
+      containers:
+        - image: nginx:1.25
+          name: azure-preauth-adv
+          ports:
+            - containerPort: 8080
+              name: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  annotations: {}
+  labels: {}
+  name: azure-preauth-adv
+  namespace: default
+spec:
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+  selector:
+    app: azure-preauth-adv
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations: {}
+  labels: {}
+  name: azure-preauth-adv
+  namespace: default
+spec:
+  rules:
+    - host: azure-preauth-adv.local
+      http:
+        paths:
+          - backend:
+              service:
+                name: azure-preauth-adv
+                port:
+                  number: 80
+            path: /
+            pathType: Prefix
+---
+apiVersion: nais.io/v1
+kind: AzureAdApplication
+metadata:
+  annotations:
+    azure.nais.io/preserve: "true"
+  labels:
+    azure: enabled
+  name: azure-preauth-adv
+  namespace: default
+spec:
+  AllowAllUsers: false
+  Claims: {}
+  PreAuthorizedApplications:
+    - Application: appA
+      Cluster: other
+      Namespace: nsA
+      Permissions:
+        Roles:
+          - role-a
+    - Application: appB
+      Cluster: mycluster
+      Namespace: default
+      Permissions:
+        Scopes:
+          - scope-b
+    - Application: appC
+      Cluster: mycluster
+      Namespace: default
+      Permissions:
+        Roles:
+          - role-c
+        Scopes:
+          - scope-c1
+          - scope-c2
+  ReplyUrls:
+    - url: https://azure-preauth-adv.local/oauth2/callback
+  SecretName: azure-azure-preauth-adv
+  SinglePageApplication: false
+

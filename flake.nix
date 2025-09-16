@@ -223,6 +223,14 @@
             };
           in pkgs.writeText "manifest.yaml" eval.yaml;
 
+          # Azure preauthorized advanced example
+          packages.manifests-azure-preauth-advanced = let
+            eval = nlib.evalAppModules {
+              modules = [ self.nixosModules.app self.nixosModules.appAccessPolicy self.nixosModules.appAzure (import ./examples/app-azure-preauth-advanced.nix) ];
+              specialArgs = { inherit lib; };
+            };
+          in pkgs.writeText "manifest.yaml" eval.yaml;
+
           # IDPorten sidecar example
           packages.manifests-idporten = let
             eval = nlib.evalAppModules {
@@ -308,6 +316,14 @@
           packages.manifests-tokenx-access = let
             eval = nlib.evalAppModules {
               modules = [ self.nixosModules.app self.nixosModules.appAccessPolicy self.nixosModules.appTokenX (import ./examples/app-tokenx-access.nix) ];
+              specialArgs = { inherit lib; };
+            };
+          in pkgs.writeText "manifest.yaml" eval.yaml;
+
+          # TokenX with inbound rules example
+          packages.manifests-tokenx-access-rules = let
+            eval = nlib.evalAppModules {
+              modules = [ self.nixosModules.app self.nixosModules.appAccessPolicy self.nixosModules.appTokenX (import ./examples/app-tokenx-access-rules.nix) ];
               specialArgs = { inherit lib; };
             };
           in pkgs.writeText "manifest.yaml" eval.yaml;

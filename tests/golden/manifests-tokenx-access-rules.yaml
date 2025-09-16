@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations: {}
+  labels: {}
+  name: tokenx-access-rules
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tokenx-access-rules
+  strategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: tokenx-access-rules
+    spec:
+      containers:
+        - envFrom:
+            - secretRef:
+                name: tokenx-tokenx-access-rules
+          image: nginx:1.25
+          name: tokenx-access-rules
+          ports:
+            - containerPort: 8080
+              name: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  annotations: {}
+  labels: {}
+  name: tokenx-access-rules
+  namespace: default
+spec:
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+  selector:
+    app: tokenx-access-rules
+  type: ClusterIP
+---
+apiVersion: nais.io/v1
+kind: Jwker
+metadata:
+  annotations: {}
+  labels: {}
+  name: tokenx-access-rules
+  namespace: default
+spec:
+  AccessPolicy:
+    Inbound:
+      Rules:
+        - Application: client-a
+          Cluster: other
+          Namespace: ns-a
+        - Application: client-b
+          Cluster: mycluster
+          Namespace: default
+    Outbound:
+      Rules: []
+  SecretName: tokenx-tokenx-access-rules
+
