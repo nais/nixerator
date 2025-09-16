@@ -2,26 +2,22 @@ SHELL := bash
 
 # Flake and package settings
 FLAKE ?= .
-OUTPUT ?= manifests-basic
-MODULE_OUTPUT ?= manifests-module-basic
-MODULE_EXT_OUTPUT ?= manifests-module-extended
-DOC_OUTPUT ?= docs-org
+OUTPUT ?= manifests
+DOC_OUTPUT ?= docs
 
 # Common paths
 RESULT := result
 MANIFEST := manifests.yaml
-MANIFEST_MODULE := manifests-module.yaml
-MANIFEST_MODULE_EXT := manifests-module-extended.yaml
 DOC := nixerator-options.org
 
-.PHONY: help all build print build-module print-module build-module-ext print-module-ext \
-        show fmt check dev manifests manifests-module manifests-module-ext \
+.PHONY: help all build print \
+        show fmt check dev manifests \
         apply apply-result docs print-docs print-json test update-golden clean
 
 help: ## Show this help.
 	@awk 'BEGIN {FS = ":.*##"; printf "Available targets\n-----------------\n"} /^[a-zA-Z0-9_.-]+:.*?##/ { printf "  %-24s %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
 
-all: manifests manifests-module docs ## Build both manifest flavors and docs.
+all: manifests docs ## Build manifests and docs.
 
 build: ## Build manifests to ./result via Nix (OUTPUT=$(OUTPUT)).
 	nix build $(FLAKE)#$(OUTPUT)
@@ -43,21 +39,6 @@ print-json: ## Print pretty JSON, '---' delimited, from ./result.
 	  first=0; i=$$((i+1)); \
 	done
 
-build-module: ## Build module-evaluated manifests (MODULE_OUTPUT=$(MODULE_OUTPUT)).
-	nix build $(FLAKE)#$(MODULE_OUTPUT)
-
-print-module: ## Print YAML from ./result (built via MODULE_OUTPUT).
-	@test -e $(RESULT) || { echo "Run 'make build-module' first"; exit 1; }
-	@echo
-	@cat $(RESULT)
-
-build-module-ext: ## Build extended module-evaluated manifests (MODULE_EXT_OUTPUT=$(MODULE_EXT_OUTPUT)).
-	nix build $(FLAKE)#$(MODULE_EXT_OUTPUT)
-
-print-module-ext: ## Print YAML from ./result (built via MODULE_EXT_OUTPUT).
-	@test -e $(RESULT) || { echo "Run 'make build-module-ext' first"; exit 1; }
-	@echo
-	@cat $(RESULT)
 
 show: ## Show flake outputs.
 	nix flake show $(FLAKE)
@@ -75,13 +56,6 @@ manifests: build ## Copy built YAML to ./manifests.yaml.
 	cp -f $(RESULT) $(MANIFEST)
 	@echo "Wrote $(MANIFEST)"
 
-manifests-module: build-module ## Copy module-built YAML to ./manifests-module.yaml.
-	cp -f $(RESULT) $(MANIFEST_MODULE)
-	@echo "Wrote $(MANIFEST_MODULE)"
-
-manifests-module-ext: build-module-ext ## Copy extended module-built YAML to ./$(MANIFEST_MODULE_EXT).
-	cp -f $(RESULT) $(MANIFEST_MODULE_EXT)
-	@echo "Wrote $(MANIFEST_MODULE_EXT)"
 
 apply: manifests ## Apply manifests.yaml with kubectl.
 	kubectl apply -f $(MANIFEST)
@@ -100,10 +74,10 @@ print-docs: ## Print the generated Org docs.
 	@sed -n '1,200p' $(RESULT)
 
 clean: ## Remove build artifacts and generated files.
-	rm -f $(RESULT) $(MANIFEST) $(MANIFEST_MODULE) $(DOC)
+	rm -f $(RESULT) $(MANIFEST) $(DOC)
 
 test: ## Run golden tests (kubeconform runs via flake checks).
 	bash tests/run.sh
 
-update-golden: ## Rebuild and update goldens (OUTPUT/MODULE_OUTPUT configurable).
+update-golden: ## Rebuild and update goldens (OUTPUT configurable).
 	UPDATE_GOLDEN=1 bash tests/run.sh

@@ -13,7 +13,7 @@
     in
       {
         # Expose a single, canonical function to build apps
-        lib = nixeratorLib // let
+        lib = nixeratorLib // (let
           baseModules = with self.nixosModules; [
             app
             appPDB
@@ -31,7 +31,7 @@
               modules = baseModules ++ extraModules ++ [ (mkConfigModule app) ];
               specialArgs = specialArgs // { lib = nixpkgs.lib; };
             };
-        };
+        });
 
         # Expose the app module for consumers
         nixosModules = {
