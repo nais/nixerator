@@ -374,6 +374,7 @@ rec {
     claims ? {},
     singlePageApplication ? false,
     allowAllUsers ? false,
+    preAuthorizedApplications ? [],
     labels ? {},
     annotations ? {}
   }:
@@ -387,6 +388,7 @@ rec {
         Claims = claims;
         SinglePageApplication = singlePageApplication;
         AllowAllUsers = allowAllUsers;
+        PreAuthorizedApplications = preAuthorizedApplications;
       }
       // (lib.optionalAttrs (tenant != null) { Tenant = tenant; }));
     });
@@ -686,6 +688,7 @@ rec {
       cmCfg = cfg.configMaps or {};
       feCfg = cfg.frontend or {};
       slCfg = cfg.securelogs or { enable = false; };
+      caCfg = cfg.caBundle or { enable = false; };
       gcpCfg = cfg.gcp or {};
       cloudSqlCfg = (gcpCfg.cloudSql or { instances = []; databases = []; users = []; });
       wpCfg = cfg.webproxy or { enable = false; };
@@ -882,6 +885,11 @@ rec {
       envBase = (ensureEnv cfg.env);
       envNoOtel = lib.filter (e: (e.name or "") != "OTEL_RESOURCE_ATTRIBUTES") envBase;
       envFinal = envNoOtel ++ baseEnv ++ gcpEnv ++ mkOtelEnv;
+      caEnv = if (caCfg.enable or false) then [
+        { name = "NAV_TRUSTSTORE_PATH"; value = "/etc/ssl/certs/java/cacerts"; }
+        { name = "NAV_TRUSTSTORE_PASSWORD"; value = "changeme"; }
+        { name = "NODE_EXTRA_CA_CERTS"; value = "/etc/pki/tls/certs/ca-bundle.crt"; }
+      ] else [];
       # Webproxy env
       webproxyEnv = if (wpCfg.enable or false) then (
         let http = (wpCfg.httpProxy or "http://webproxy:8088"); https = (wpCfg.httpsProxy or http); in
@@ -987,6 +995,21 @@ rec {
       secureLogsMounts = if secureLogsEnabled then [
         { name = "secure-logs"; mountPath = "/secure-logs"; }
       ] else [];
+      # CA bundle volumes and mounts
+      caVolumes = if (caCfg.enable or false) then [
+        { name = "ca-bundle-jks"; configMap = { name = "ca-bundle-jks"; }; }
+        { name = "ca-bundle-pem"; configMap = { name = "ca-bundle-pem"; }; }
+      ] else [];
+      caMounts = if (caCfg.enable or false) then (
+        [ { name = "ca-bundle-jks"; mountPath = "/etc/ssl/certs/java/cacerts"; subPath = "ca-bundle.jks"; readOnly = true; } ]
+        ++ (map (p: { name = "ca-bundle-pem"; mountPath = p; subPath = "ca-bundle.pem"; readOnly = true; }) [
+          "/etc/ssl/certs/ca-certificates.crt"
+          "/etc/pki/tls/certs/ca-bundle.crt"
+          "/etc/ssl/ca-bundle.pem"
+          "/etc/pki/tls/cacert.pem"
+          "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem"
+        ])
+      ) else [];
       secureLogsInitContainers = if secureLogsEnabled then [
         {
           name = "secure-logs-fluentbit";
@@ -1119,7 +1142,7 @@ rec {
         annotations = annotations // reloaderAnn // ttlAnn;
         image = cfg.image;
         replicas = cfg.replicas;
-        env = envFinal ++ (if (texasCfg.enable or false) then [
+        env = envFinal ++ caEnv ++ (if (texasCfg.enable or false) then [
           { name = "NAIS_TOKEN_ENDPOINT"; value = "http://127.0.0.1:7164/api/v1/token"; }
           { name = "NAIS_TOKEN_EXCHANGE_ENDPOINT"; value = "http://127.0.0.1:7164/api/v1/token/exchange"; }
           { name = "NAIS_TOKEN_INTROSPECTION_ENDPOINT"; value = "http://127.0.0.1:7164/api/v1/introspect"; }
@@ -1136,11 +1159,11 @@ rec {
           ++ (lib.optional (maskinCfg.enable or false) { secretRef = { name = "maskinporten-" + name; }; })
           ++ (lib.optional (idpCfg.enable or false || (idpCfg.sidecar.enabled or false)) { secretRef = { name = "idporten-sso"; }; }));
         resources = (if (resourcesCfg.limits or {}) == {} && (resourcesCfg.requests or {}) == {} then null else resourcesCfg);
-        volumeMounts = let ks = aivenKafka; in (filesMounts ++ tmpMount ++ secureLogsMounts)
+        volumeMounts = let ks = aivenKafka; in (filesMounts ++ tmpMount ++ secureLogsMounts ++ caMounts)
           ++ (if ks != null && (ks.secretName or null) != null && (ks.mountCredentials or true)
             then [ { name = "aiven-credentials"; mountPath = ks.mountPath or "/var/run/secrets/nais.io/kafka"; readOnly = true; } ] else [])
           ++ (let gen = feCfg.generatedConfig or null; in lib.optional (gen != null && (feCfg.telemetryUrl or null) != null) { name = "frontend-config"; mountPath = gen.mountPath; readOnly = true; });
-        volumes = let ks = aivenKafka; in (filesVolumes ++ tmpVol ++ secureLogsVolumes)
+        volumes = let ks = aivenKafka; in (filesVolumes ++ tmpVol ++ secureLogsVolumes ++ caVolumes)
           ++ (if ks != null && (ks.secretName or null) != null && (ks.mountCredentials or true)
             then [ { name = "aiven-credentials"; secret = { secretName = ks.secretName; items = [
               { key = "KAFKA_CERTIFICATE"; path = "kafka.crt"; }
@@ -1535,13 +1558,19 @@ export default {
               annotations = annotations;
             }) ]) (cloudSqlCfg.users or []));
       # Azure AD Application
+      # Copy only azure.nais.io/* annotations onto AzureAdApplication
+      hasPrefix = pref: s: lib.substring 0 (lib.stringLength pref) s == pref;
+      azureAnnotations = lib.filterAttrs (n: _: hasPrefix "azure.nais.io/" n) annotations;
+      # PreAuthorizedApplications from accessPolicy inbound.allowedApps
+      preAuthApps = let apps = (apCfg.inbound or {}).allowedApps or []; in
+        map (appName: { Application = appName; Namespace = namespace; Cluster = clusterName; }) apps;
       azureApplication =
         let app = azureCfg.application or { enabled = false; }; in
         lib.optional ((app.enabled or false) || (azureCfg.sidecar.enabled or false)) (
           mkAzureAdApplication {
             inherit name namespace;
             labels = labelsWithAuth;
-            annotations = annotations;
+            annotations = azureAnnotations;
             replyUrls = let urls = app.replyURLs or []; in
               if urls != [] then urls else (
                 if (ingressCfg.enable or false) && (ingressCfg.host or null) != null
@@ -1550,6 +1579,7 @@ export default {
             claims = app.claims or {};
             singlePageApplication = if (azureCfg.sidecar.enabled or false) then false else (app.singlePageApplication or false);
             allowAllUsers = app.allowAllUsers or false;
+            preAuthorizedApplications = preAuthApps;
           }
         );
       idportenClient = lib.optional (idpCfg.enable or false || (idpCfg.sidecar.enabled or false)) (
@@ -1632,7 +1662,12 @@ export default {
         ++ gcpCloudSql
         ++ azureApplication
         ++ idportenClient
-        ++ (lib.optional (tokenxCfg.enable or false) (mkJwker { inherit name namespace; labels = labelsWithAuth; annotations = annotations; accessPolicy = {}; secretName = "tokenx-" + name; }))
+        ++ (lib.optional (tokenxCfg.enable or false) (
+          let inboundApps = (apCfg.inbound or {}).allowedApps or [];
+              rules = map (appName: { Application = appName; Namespace = namespace; Cluster = clusterName; }) inboundApps;
+              access = { Inbound = { Rules = rules; }; Outbound = { Rules = []; }; };
+          in mkJwker { inherit name namespace; labels = labelsWithAuth; annotations = annotations; accessPolicy = access; secretName = "tokenx-" + name; }
+        ))
         ++ (lib.optional (maskinCfg.enable or false) (mkMaskinportenClient { inherit name namespace; labels = labelsWithAuth; annotations = annotations; scopes = { consumed = (maskinCfg.scopes.consumed or []); exposed = (maskinCfg.scopes.exposed or []); }; secretName = "maskinporten-" + name; }))
         ++ frontendConfig;
     in {

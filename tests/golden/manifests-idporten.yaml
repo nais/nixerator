@@ -13,6 +13,9 @@ spec:
   selector:
     matchLabels:
       app: idporten
+      idporten: enabled
+      otel: enabled
+      wonderwall: enabled
   strategy:
     type: RollingUpdate
   template:
@@ -126,4 +129,3 @@ metadata:
   namespace: default
 spec:
   SecretName: idporten-sso
-

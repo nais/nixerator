@@ -22,6 +22,7 @@
             appGcpCloudSQL
             appGcpBigQuery
             appAzure
+            appIDPorten
             appSecureLogs
             appFrontend
             appPDB
@@ -37,6 +38,7 @@
             appTokenX
             appMaskinporten
             appTexas
+            appCABundle
             appWebproxy
             appLeaderElection
             appIntegrations
@@ -64,6 +66,7 @@
           appGcpCloudSQL = import ./modules/ext/gcp-cloudsql.nix;
           appGcpBigQuery = import ./modules/ext/gcp-bigquery.nix;
           appAzure = import ./modules/ext/azure.nix;
+          appIDPorten = import ./modules/ext/idporten.nix;
           appSecureLogs = import ./modules/ext/securelogs.nix;
           appFrontend = import ./modules/ext/frontend.nix;
           appPDB = import ./modules/ext/pdb.nix;
@@ -79,6 +82,7 @@
           appTokenX = import ./modules/ext/tokenx.nix;
           appMaskinporten = import ./modules/ext/maskinporten.nix;
           appTexas = import ./modules/ext/texas.nix;
+          appCABundle = import ./modules/ext/cabundle.nix;
           appWebproxy = import ./modules/ext/webproxy.nix;
           appLeaderElection = import ./modules/ext/leaderelection.nix;
           appIntegrations = import ./modules/ext/integrations.nix;
@@ -148,6 +152,7 @@
               appGcpCloudSQL
               appGcpBigQuery
               appAzure
+              appIDPorten
               appSecureLogs
               appFrontend
               appPDB
@@ -163,6 +168,7 @@
               appTokenX
               appMaskinporten
               appTexas
+              appCABundle
               appWebproxy
               appLeaderElection
               appIntegrations
@@ -205,6 +211,14 @@
           packages.manifests-azure-sidecar = let
             eval = nlib.evalAppModules {
               modules = [ self.nixosModules.app self.nixosModules.appAzure (import ./examples/app-azure-sidecar.nix) ];
+              specialArgs = { inherit lib; };
+            };
+          in pkgs.writeText "manifest.yaml" eval.yaml;
+
+          # Azure preauthorized example
+          packages.manifests-azure-preauth = let
+            eval = nlib.evalAppModules {
+              modules = [ self.nixosModules.app self.nixosModules.appAccessPolicy self.nixosModules.appAzure (import ./examples/app-azure-preauth.nix) ];
               specialArgs = { inherit lib; };
             };
           in pkgs.writeText "manifest.yaml" eval.yaml;
@@ -290,6 +304,14 @@
             };
           in pkgs.writeText "manifest.yaml" eval.yaml;
 
+          # TokenX with access policy example
+          packages.manifests-tokenx-access = let
+            eval = nlib.evalAppModules {
+              modules = [ self.nixosModules.app self.nixosModules.appAccessPolicy self.nixosModules.appTokenX (import ./examples/app-tokenx-access.nix) ];
+              specialArgs = { inherit lib; };
+            };
+          in pkgs.writeText "manifest.yaml" eval.yaml;
+
           # Maskinporten example
           packages.manifests-maskinporten = let
             eval = nlib.evalAppModules {
@@ -302,6 +324,14 @@
           packages.manifests-texas = let
             eval = nlib.evalAppModules {
               modules = [ self.nixosModules.app self.nixosModules.appTokenX self.nixosModules.appMaskinporten self.nixosModules.appTexas (import ./examples/app-texas.nix) ];
+              specialArgs = { inherit lib; };
+            };
+          in pkgs.writeText "manifest.yaml" eval.yaml;
+
+          # CA bundle example
+          packages.manifests-cabundle = let
+            eval = nlib.evalAppModules {
+              modules = [ self.nixosModules.app self.nixosModules.appCABundle (import ./examples/app-cabundle.nix) ];
               specialArgs = { inherit lib; };
             };
           in pkgs.writeText "manifest.yaml" eval.yaml;

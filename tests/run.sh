@@ -36,8 +36,10 @@ AZURE_APP_OUTPUT=${AZURE_APP_OUTPUT:-manifests-azure-application}
 AZURE_SIDECAR_OUTPUT=${AZURE_SIDECAR_OUTPUT:-manifests-azure-sidecar}
 IDPORTEN_OUTPUT=${IDPORTEN_OUTPUT:-manifests-idporten}
 TOKENX_OUTPUT=${TOKENX_OUTPUT:-manifests-tokenx}
+TOKENX_ACCESS_OUTPUT=${TOKENX_ACCESS_OUTPUT:-manifests-tokenx-access}
 MASKINPORTEN_OUTPUT=${MASKINPORTEN_OUTPUT:-manifests-maskinporten}
 TEXAS_OUTPUT=${TEXAS_OUTPUT:-manifests-texas}
+CABUNDLE_OUTPUT=${CABUNDLE_OUTPUT:-manifests-cabundle}
 
 YQ=${YQ:-yq}
 
@@ -114,7 +116,9 @@ build_and_check "$AZURE_APP_OUTPUT" "${AZURE_APP_OUTPUT}.yaml"
 build_and_check "$AZURE_SIDECAR_OUTPUT" "${AZURE_SIDECAR_OUTPUT}.yaml"
 build_and_check "$IDPORTEN_OUTPUT" "${IDPORTEN_OUTPUT}.yaml"
 build_and_check "$TOKENX_OUTPUT" "${TOKENX_OUTPUT}.yaml"
+build_and_check "$TOKENX_ACCESS_OUTPUT" "${TOKENX_ACCESS_OUTPUT}.yaml"
 build_and_check "$MASKINPORTEN_OUTPUT" "${MASKINPORTEN_OUTPUT}.yaml"
 build_and_check "$TEXAS_OUTPUT" "${TEXAS_OUTPUT}.yaml"
+build_and_check "$CABUNDLE_OUTPUT" "${CABUNDLE_OUTPUT}.yaml"
 
 echo "All tests passed."

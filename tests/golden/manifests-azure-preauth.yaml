@@ -1,0 +1,89 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations: {}
+  labels:
+    azure: enabled
+  name: azure-preauth
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: azure-preauth
+      azure: enabled
+  strategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: azure-preauth
+        azure: enabled
+    spec:
+      containers:
+        - image: nginx:1.25
+          name: azure-preauth
+          ports:
+            - containerPort: 8080
+              name: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  annotations: {}
+  labels: {}
+  name: azure-preauth
+  namespace: default
+spec:
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+  selector:
+    app: azure-preauth
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations: {}
+  labels: {}
+  name: azure-preauth
+  namespace: default
+spec:
+  rules:
+    - host: azure-preauth.local
+      http:
+        paths:
+          - backend:
+              service:
+                name: azure-preauth
+                port:
+                  number: 80
+            path: /
+            pathType: Prefix
+---
+apiVersion: nais.io/v1
+kind: AzureAdApplication
+metadata:
+  annotations:
+    azure.nais.io/preserve: "true"
+  labels:
+    azure: enabled
+  name: azure-preauth
+  namespace: default
+spec:
+  AllowAllUsers: false
+  Claims: {}
+  PreAuthorizedApplications:
+    - Application: app1
+      Cluster: mycluster
+      Namespace: default
+    - Application: app2
+      Cluster: mycluster
+      Namespace: default
+  ReplyUrls:
+    - url: https://azure-preauth.local/oauth2/callback
+  SecretName: azure-azure-preauth
+  SinglePageApplication: false
+
