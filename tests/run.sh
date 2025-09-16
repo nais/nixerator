@@ -44,6 +44,7 @@ MASKINPORTEN_OUTPUT=${MASKINPORTEN_OUTPUT:-manifests-maskinporten}
 TEXAS_OUTPUT=${TEXAS_OUTPUT:-manifests-texas}
 CABUNDLE_OUTPUT=${CABUNDLE_OUTPUT:-manifests-cabundle}
 LOGIN_OUTPUT=${LOGIN_OUTPUT:-manifests-login}
+POSTGRES_OUTPUT=${POSTGRES_OUTPUT:-manifests-postgres}
 
 YQ=${YQ:-yq}
 
@@ -128,5 +129,6 @@ build_and_check "$MASKINPORTEN_OUTPUT" "${MASKINPORTEN_OUTPUT}.yaml"
 build_and_check "$TEXAS_OUTPUT" "${TEXAS_OUTPUT}.yaml"
 build_and_check "$CABUNDLE_OUTPUT" "${CABUNDLE_OUTPUT}.yaml"
 build_and_check "$LOGIN_OUTPUT" "${LOGIN_OUTPUT}.yaml"
+build_and_check "$POSTGRES_OUTPUT" "${POSTGRES_OUTPUT}.yaml"
 
 echo "All tests passed."

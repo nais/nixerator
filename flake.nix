@@ -39,6 +39,7 @@
             appMaskinporten
             appTexas
             appCABundle
+            appPostgres
             appLogin
             appWebproxy
             appLeaderElection
@@ -84,6 +85,7 @@
           appMaskinporten = import ./modules/ext/maskinporten.nix;
           appTexas = import ./modules/ext/texas.nix;
           appCABundle = import ./modules/ext/cabundle.nix;
+          appPostgres = import ./modules/ext/postgres.nix;
           appLogin = import ./modules/ext/login.nix;
           appWebproxy = import ./modules/ext/webproxy.nix;
           appLeaderElection = import ./modules/ext/leaderelection.nix;
@@ -171,6 +173,7 @@
               appMaskinporten
               appTexas
               appCABundle
+              appPostgres
               appLogin
               appWebproxy
               appLeaderElection
@@ -359,6 +362,14 @@
           packages.manifests-login = let
             eval = nlib.evalAppModules {
               modules = [ self.nixosModules.app self.nixosModules.appLogin (import ./examples/app-login.nix) ];
+              specialArgs = { inherit lib; };
+            };
+          in pkgs.writeText "manifest.yaml" eval.yaml;
+
+          # Postgres operator example
+          packages.manifests-postgres = let
+            eval = nlib.evalAppModules {
+              modules = [ self.nixosModules.app self.nixosModules.appPostgres (import ./examples/app-postgres.nix) ];
               specialArgs = { inherit lib; };
             };
           in pkgs.writeText "manifest.yaml" eval.yaml;

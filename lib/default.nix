@@ -308,6 +308,52 @@ rec {
       };
     };
 
+  # Postgres operator cluster (acid.zalan.do/v1)
+  mkPostgresCluster = {
+    name,
+    appNamespace,
+    namespace,
+    allowDeletion ? false,
+    majorVersion ? "14",
+    cpu ? "500m",
+    memory ? "512Mi",
+    diskSize ? "20Gi",
+    highAvailability ? false,
+    collation ? "en_US.UTF-8",
+    audit ? { enabled = false; statementClasses = []; },
+    dockerImage ? null
+  }:
+    let
+      instances = if highAvailability then 3 else 2;
+      cpuLimit = cpu;
+      baseSpec = {
+        enableConnectionPooler = true;
+        enableReplicaConnectionPooler = false;
+        connectionPooler.resources.resourceRequests = { cpu = "50m"; memory = "50Mi"; };
+        nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms = [ { matchExpressions = [ { key = "nais.io/type"; operator = "In"; values = [ "postgres" ]; } ]; } ];
+        postgresql = {
+          version = majorVersion;
+          parameters = ({ log_destination = "jsonlog"; log_filename = "postgresql.log"; shared_preload_libraries = "bg_mon,pg_stat_statements,pgextwlist,pg_auth_mon,set_user,timescaledb,pg_cron,pg_stat_kcache,pgaudit"; }
+             // (if (audit.enabled or false) then { "pgaudit.log" = (if (audit.statementClasses or []) == [] then "write,ddl" else (builtins.concatStringsSep "," (audit.statementClasses or []))); } else {}));
+        };
+        volume = { size = diskSize; };
+        patroni = { initdb = { encoding = "UTF8"; locale = collation; }; synchronousMode = true; synchronousModeStrict = true; };
+        resources = { resourceRequests = { cpu = cpu; memory = memory; }; resourceLimits = { cpu = cpuLimit; memory = memory; }; };
+        teamId = appNamespace;
+        numberOfInstances = instances;
+        preparedDatabases.app = { defaultUsers = true; extensions = { pgaudit = "public"; }; secretNamespace = appNamespace; preparedSchemas.public = {}; };
+        spiloRunAsUser = 101;
+        spiloRunAsGroup = 103;
+        spiloFSGroup = 103;
+      } // (lib.optionalAttrs (dockerImage != null) { dockerImage = dockerImage; });
+    in {
+      apiVersion = "acid.zalan.do/v1";
+      kind = "postgresql";
+      metadata = ({ name = name; namespace = namespace; labels = { "apiserver-access" = "enabled"; }; }
+        // (lib.optionalAttrs allowDeletion { annotations."nais.io/postgresqlDeleteResource" = name; }));
+      spec = baseSpec;
+    };
+
   # NAIS: IDPortenClient
   mkIDPortenClient = {
     name,
@@ -700,6 +746,7 @@ rec {
       tokenxCfg = cfg.tokenx or { enable = false; };
       maskinCfg = cfg.maskinporten or { enable = false; scopes = { consumed = []; exposed = []; }; };
       texasCfg = cfg.texas or { enable = false; };
+      pgCfg = cfg.postgres or { enable = false; };
       npCfg = cfg.networkPolicy or { enable = false; };
       apCfg = cfg.accessPolicy or { enable = false; };
       fqdnCfg = cfg.fqdnPolicy or { enable = false; rules = []; };
@@ -1214,7 +1261,17 @@ rec {
           { name = "NAIS_TOKEN_ENDPOINT"; value = "http://127.0.0.1:7164/api/v1/token"; }
           { name = "NAIS_TOKEN_EXCHANGE_ENDPOINT"; value = "http://127.0.0.1:7164/api/v1/token/exchange"; }
           { name = "NAIS_TOKEN_INTROSPECTION_ENDPOINT"; value = "http://127.0.0.1:7164/api/v1/introspect"; }
-        ] else []) ++ webproxyEnv ++ integrationsEnv ++ leaderEnv ++ aivenEnv
+        ] else []) ++ webproxyEnv ++ integrationsEnv ++ leaderEnv ++ aivenEnv ++ (
+          if ((cfg.postgres or { enable = false; }).enable or false) then [
+            { name = "PGHOST"; value = "${(let cn = (((cfg.postgres or {}).cluster or { name = ""; }).name or ""); in if cn != "" then cn else name)}-pooler.pg-${namespace}"; }
+            { name = "PGPORT"; value = "5432"; }
+            { name = "PGDATABASE"; value = "app"; }
+            { name = "PGUSER"; valueFrom.secretKeyRef = { name = "app-owner-user.${(let cn = (((cfg.postgres or {}).cluster or { name = ""; }).name or ""); in if cn != "" then cn else name)}.credentials.postgresql.acid.zalan.do"; key = "username"; }; }
+            { name = "PGPASSWORD"; valueFrom.secretKeyRef = { name = "app-owner-user.${(let cn = (((cfg.postgres or {}).cluster or { name = ""; }).name or ""); in if cn != "" then cn else name)}.credentials.postgresql.acid.zalan.do"; key = "password"; }; }
+            { name = "PGURL"; value = "postgresql://$(PGUSER):$(PGPASSWORD)@${(let cn = (((cfg.postgres or {}).cluster or { name = ""; }).name or ""); in if cn != "" then cn else name)}-pooler.pg-${namespace}:5432/app"; }
+            { name = "PGJDBCURL"; value = "jdbc:postgresql://${(let cn = (((cfg.postgres or {}).cluster or { name = ""; }).name or ""); in if cn != "" then cn else name)}-pooler.pg-${namespace}:5432/app?user=$(PGUSER)&password=$(PGPASSWORD)"; }
+          ] else []
+        )
           ++ (let turl = (feCfg.telemetryUrl or null); in lib.optional (turl != null) { name = "NAIS_FRONTEND_TELEMETRY_COLLECTOR_URL"; value = turl; });
         command = cfg.command or [];
         ports = let
@@ -1746,6 +1803,19 @@ export default {
         ++ bqDatasets
         ++ gcpBuckets
         ++ gcpCloudSql
+        ++ (lib.optional ((cfg.postgres or { enable = false; }).enable or false) (mkPostgresCluster {
+          name = (let cn = ((cfg.postgres or { cluster = { name = ""; }; }).cluster.name or ""); in if cn != "" then cn else name);
+          appNamespace = namespace;
+          namespace = "pg-" + namespace;
+          allowDeletion = (((cfg.postgres or {}).cluster or { allowDeletion = false; }).allowDeletion or false);
+          majorVersion = (((cfg.postgres or {}).cluster or { majorVersion = "14"; }).majorVersion or "14");
+          cpu = ((((cfg.postgres or {}).cluster or { resources = { }; }).resources or { }).cpu or "500m");
+          memory = ((((cfg.postgres or {}).cluster or { resources = { }; }).resources or { }).memory or "512Mi");
+          diskSize = ((((cfg.postgres or {}).cluster or { resources = { }; }).resources or { }).diskSize or "20Gi");
+          highAvailability = (((cfg.postgres or {}).cluster or { highAvailability = false; }).highAvailability or false);
+          collation = (( ((cfg.postgres or {}).database or { collation = "en_US"; }).collation or "en_US") + ".UTF-8");
+          audit = (((cfg.postgres or {}).cluster or { audit = { enabled = false; statementClasses = []; }; }).audit or { enabled = false; statementClasses = []; });
+        }))
         ++ azureApplication
         ++ idportenClient
         ++ (lib.optional (tokenxCfg.enable or false) (
