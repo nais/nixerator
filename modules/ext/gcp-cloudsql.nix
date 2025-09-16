@@ -2,18 +2,7 @@
 let
   types = lib.types;
 in {
-  options.app.gcp = {
-    projectId = lib.mkOption {
-      type = types.nullOr types.str;
-      default = null;
-      description = "Team project id (for CNRM resources and env).";
-    };
-    googleProjectId = lib.mkOption {
-      type = types.nullOr types.str;
-      default = null;
-      description = "Main Google project id (for IAM ServiceAccount in serviceaccounts ns).";
-    };
-    cloudSql = {
+  options.app.gcp.cloudSql = {
       instances = lib.mkOption {
         type = types.listOf (types.submodule ({ ... }: {
           options = {
@@ -53,6 +42,5 @@ in {
         default = [];
         description = "Cloud SQL users (sql.cnrm.cloud.google.com/v1beta1 SQLUser)";
       };
-    };
   };
 }

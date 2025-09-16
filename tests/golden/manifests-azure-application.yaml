@@ -11,6 +11,7 @@ spec:
   selector:
     matchLabels:
       app: azure-app
+      azure: enabled
   strategy:
     type: RollingUpdate
   template:
@@ -78,4 +79,3 @@ spec:
   SecretName: azure-azure-app
   SinglePageApplication: false
   Tenant: nav.no
-

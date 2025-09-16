@@ -1,0 +1,115 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations: {}
+  labels:
+    otel: enabled
+    texas: enabled
+  name: texas
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: texas
+  strategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: texas
+        otel: enabled
+        texas: enabled
+    spec:
+      containers:
+        - env:
+            - name: NAIS_TOKEN_ENDPOINT
+              value: http://127.0.0.1:7164/api/v1/token
+            - name: NAIS_TOKEN_EXCHANGE_ENDPOINT
+              value: http://127.0.0.1:7164/api/v1/token/exchange
+            - name: NAIS_TOKEN_INTROSPECTION_ENDPOINT
+              value: http://127.0.0.1:7164/api/v1/introspect
+          envFrom:
+            - secretRef:
+                name: tokenx-texas
+            - secretRef:
+                name: maskinporten-texas
+          image: nginx:1.25
+          name: texas
+          ports:
+            - containerPort: 8080
+              name: http
+      initContainers:
+        - env:
+            - name: BIND_ADDRESS
+              value: 127.0.0.1:7164
+            - name: NAIS_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: MASKINPORTEN_ENABLED
+              value: "true"
+            - name: TOKEN_X_ENABLED
+              value: "true"
+          envFrom:
+            - secretRef:
+                name: maskinporten-texas
+            - secretRef:
+                name: tokenx-texas
+          image: ghcr.io/nais/texas:latest
+          imagePullPolicy: IfNotPresent
+          name: texas
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+---
+apiVersion: v1
+kind: Service
+metadata:
+  annotations: {}
+  labels: {}
+  name: texas
+  namespace: default
+spec:
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+  selector:
+    app: texas
+  type: ClusterIP
+---
+apiVersion: nais.io/v1
+kind: Jwker
+metadata:
+  annotations: {}
+  labels:
+    otel: enabled
+    texas: enabled
+  name: texas
+  namespace: default
+spec:
+  AccessPolicy: {}
+  SecretName: tokenx-texas
+---
+apiVersion: nais.io/v1
+kind: MaskinportenClient
+metadata:
+  annotations: {}
+  labels:
+    otel: enabled
+    texas: enabled
+  name: texas
+  namespace: default
+spec:
+  Scopes:
+    ConsumedScopes: []
+    ExposedScopes: []
+  SecretName: maskinporten-texas
+

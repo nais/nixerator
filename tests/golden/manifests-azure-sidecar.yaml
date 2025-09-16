@@ -13,6 +13,9 @@ spec:
   selector:
     matchLabels:
       app: azure-sidecar
+      azure: enabled
+      otel: enabled
+      wonderwall: enabled
   strategy:
     type: RollingUpdate
   template:
@@ -132,4 +135,3 @@ spec:
     - url: https://azure-sidecar.local/oauth2/callback
   SecretName: azure-azure-sidecar
   SinglePageApplication: false
-

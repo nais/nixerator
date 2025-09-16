@@ -2,30 +2,27 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   annotations: {}
-  labels:
-    leader-election: enabled
-  name: leader
+  labels: {}
+  name: tokenx
   namespace: default
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: leader
-      leader-election: enabled
+      app: tokenx
   strategy:
     type: RollingUpdate
   template:
     metadata:
       labels:
-        app: leader
-        leader-election: enabled
+        app: tokenx
     spec:
       containers:
-        - env:
-            - name: LEADER_ELECTION_ENABLED
-              value: "true"
+        - envFrom:
+            - secretRef:
+                name: tokenx-tokenx
           image: nginx:1.25
-          name: leader
+          name: tokenx
           ports:
             - containerPort: 8080
               name: http
@@ -35,7 +32,7 @@ kind: Service
 metadata:
   annotations: {}
   labels: {}
-  name: leader
+  name: tokenx
   namespace: default
 spec:
   ports:
@@ -43,5 +40,17 @@ spec:
       port: 80
       targetPort: 8080
   selector:
-    app: leader
+    app: tokenx
   type: ClusterIP
+---
+apiVersion: nais.io/v1
+kind: Jwker
+metadata:
+  annotations: {}
+  labels: {}
+  name: tokenx
+  namespace: default
+spec:
+  AccessPolicy: {}
+  SecretName: tokenx-tokenx
+

@@ -34,6 +34,9 @@ INTEGRATIONS_STUBS_OUTPUT=${INTEGRATIONS_STUBS_OUTPUT:-manifests-integrations-st
 LEADER_ELECTION_OUTPUT=${LEADER_ELECTION_OUTPUT:-manifests-leader-election}
 AZURE_APP_OUTPUT=${AZURE_APP_OUTPUT:-manifests-azure-application}
 AZURE_SIDECAR_OUTPUT=${AZURE_SIDECAR_OUTPUT:-manifests-azure-sidecar}
+TOKENX_OUTPUT=${TOKENX_OUTPUT:-manifests-tokenx}
+MASKINPORTEN_OUTPUT=${MASKINPORTEN_OUTPUT:-manifests-maskinporten}
+TEXAS_OUTPUT=${TEXAS_OUTPUT:-manifests-texas}
 
 YQ=${YQ:-yq}
 
@@ -108,5 +111,8 @@ build_and_check "$INTEGRATIONS_STUBS_OUTPUT" "${INTEGRATIONS_STUBS_OUTPUT}.yaml"
 build_and_check "$LEADER_ELECTION_OUTPUT" "${LEADER_ELECTION_OUTPUT}.yaml"
 build_and_check "$AZURE_APP_OUTPUT" "${AZURE_APP_OUTPUT}.yaml"
 build_and_check "$AZURE_SIDECAR_OUTPUT" "${AZURE_SIDECAR_OUTPUT}.yaml"
+build_and_check "$TOKENX_OUTPUT" "${TOKENX_OUTPUT}.yaml"
+build_and_check "$MASKINPORTEN_OUTPUT" "${MASKINPORTEN_OUTPUT}.yaml"
+build_and_check "$TEXAS_OUTPUT" "${TEXAS_OUTPUT}.yaml"
 
 echo "All tests passed."

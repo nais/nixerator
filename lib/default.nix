@@ -308,6 +308,47 @@ rec {
       };
     };
 
+  # NAIS: Jwker (TokenX client)
+  mkJwker = {
+    name,
+    namespace ? "default",
+    accessPolicy ? {},
+    secretName ? null,
+    labels ? {},
+    annotations ? {}
+  }:
+    {
+      apiVersion = "nais.io/v1";
+      kind = "Jwker";
+      metadata = { inherit name namespace labels annotations; };
+      spec = {
+        AccessPolicy = accessPolicy;
+        SecretName = if secretName == null then "tokenx-" + name else secretName;
+      };
+    };
+
+  # NAIS: MaskinportenClient
+  mkMaskinportenClient = {
+    name,
+    namespace ? "default",
+    scopes ? { consumed = []; exposed = []; },
+    secretName ? null,
+    labels ? {},
+    annotations ? {}
+  }:
+    {
+      apiVersion = "nais.io/v1";
+      kind = "MaskinportenClient";
+      metadata = { inherit name namespace labels annotations; };
+      spec = {
+        Scopes = {
+          ConsumedScopes = scopes.consumed or [];
+          ExposedScopes = scopes.exposed or [];
+        };
+        SecretName = if secretName == null then "maskinporten-" + name else secretName;
+      };
+    };
+
   # AzureAdApplication (nais.io/v1)
   mkAzureAdApplication = {
     name,
@@ -637,6 +678,9 @@ rec {
       ints = cfg.integrations or {};
       vaultCfg = cfg.vault or { enable = false; };
       azureCfg = cfg.azure or { application = { enabled = false; }; sidecar = { enabled = false; }; };
+      tokenxCfg = cfg.tokenx or { enable = false; };
+      maskinCfg = cfg.maskinporten or { enable = false; scopes = { consumed = []; exposed = []; }; };
+      texasCfg = cfg.texas or { enable = false; };
       npCfg = cfg.networkPolicy or { enable = false; };
       apCfg = cfg.accessPolicy or { enable = false; };
       fqdnCfg = cfg.fqdnPolicy or { enable = false; rules = []; };
@@ -899,11 +943,12 @@ rec {
       # Optional aiven label when any aiven integration is configured
       anyAiven = aivenEnabled && ((aivenKafka != null) || (aivenOpenSearch != null) || (aivenValkey != []));
       labelsWithAiven = labelsWithTeam // (lib.optionalAttrs anyAiven { aiven = "enabled"; });
-      # Auth labels when Azure/Wonderwall is enabled
+      # Auth labels when Azure/Wonderwall/Texas enabled
       labelsWithAuth = labelsWithAiven
         // (lib.optionalAttrs ((azureCfg.application.enabled or false) || (azureCfg.sidecar.enabled or false)) { azure = "enabled"; })
         // (lib.optionalAttrs (azureCfg.sidecar.enabled or false) { wonderwall = "enabled"; })
-        // (lib.optionalAttrs (azureCfg.sidecar.enabled or false) { otel = "enabled"; });
+        // (lib.optionalAttrs (azureCfg.sidecar.enabled or false) { otel = "enabled"; })
+        // (lib.optionalAttrs (texasCfg.enable or false) { texas = "enabled"; otel = "enabled"; });
 
       # Secure logs: labels, volumes, initContainer, mounts
       secureLogsEnabled = slCfg.enable or false;
@@ -1012,7 +1057,11 @@ rec {
         annotations = annotations // reloaderAnn // ttlAnn;
         image = cfg.image;
         replicas = cfg.replicas;
-        env = envFinal ++ webproxyEnv ++ integrationsEnv ++ leaderEnv ++ aivenEnv
+        env = envFinal ++ (if (texasCfg.enable or false) then [
+          { name = "NAIS_TOKEN_ENDPOINT"; value = "http://127.0.0.1:7164/api/v1/token"; }
+          { name = "NAIS_TOKEN_EXCHANGE_ENDPOINT"; value = "http://127.0.0.1:7164/api/v1/token/exchange"; }
+          { name = "NAIS_TOKEN_INTROSPECTION_ENDPOINT"; value = "http://127.0.0.1:7164/api/v1/introspect"; }
+        ] else []) ++ webproxyEnv ++ integrationsEnv ++ leaderEnv ++ aivenEnv
           ++ (let turl = (feCfg.telemetryUrl or null); in lib.optional (turl != null) { name = "NAIS_FRONTEND_TELEMETRY_COLLECTOR_URL"; value = turl; });
         command = cfg.command or [];
         ports = let
@@ -1020,7 +1069,9 @@ rec {
           base = [{ name = "http"; containerPort = serviceCfg.targetPort; }];
           extra = if (promCfg.enable or false) && ((ep.port or "http") != "http") && ((promCfg.containerPort or null) != null) then [ { name = ep.port; containerPort = promCfg.containerPort; } ] else [];
         in base ++ extra;
-        envFrom = lib.filter (x: x != {}) envFrom;
+        envFrom = lib.filter (x: x != {}) (envFrom
+          ++ (lib.optional (tokenxCfg.enable or false) { secretRef = { name = "tokenx-" + name; }; })
+          ++ (lib.optional (maskinCfg.enable or false) { secretRef = { name = "maskinporten-" + name; }; }));
         resources = (if (resourcesCfg.limits or {}) == {} && (resourcesCfg.requests or {}) == {} then null else resourcesCfg);
         volumeMounts = let ks = aivenKafka; in (filesMounts ++ tmpMount ++ secureLogsMounts)
           ++ (if ks != null && (ks.secretName or null) != null && (ks.mountCredentials or true)
@@ -1037,6 +1088,32 @@ rec {
             ]; }; } ] else [])
           ++ (let gen = feCfg.generatedConfig or null; in lib.optional (gen != null && (feCfg.telemetryUrl or null) != null) { name = "frontend-config"; configMap = { name = "${name}-frontend-config"; }; });
         initContainers = secureLogsInitContainers ++ wwInit
+          ++ (if (texasCfg.enable or false) && ((azureCfg.application.enabled or false) || (maskinCfg.enable or false) || (tokenxCfg.enable or false)) then [
+            {
+              name = "texas";
+              image = texasCfg.image or "ghcr.io/nais/texas:latest";
+              imagePullPolicy = "IfNotPresent";
+              env = ([
+                { name = "BIND_ADDRESS"; value = "127.0.0.1:7164"; }
+                { name = "NAIS_POD_NAME"; valueFrom.fieldRef.fieldPath = "metadata.name"; }
+              ]
+              ++ (lib.optional ((azureCfg.application.enabled or false)) { name = "AZURE_ENABLED"; value = "true"; })
+              ++ (lib.optional (maskinCfg.enable or false) { name = "MASKINPORTEN_ENABLED"; value = "true"; })
+              ++ (lib.optional (tokenxCfg.enable or false) { name = "TOKEN_X_ENABLED"; value = "true"; }));
+              envFrom = (
+                (lib.optional ((azureCfg.application.enabled or false)) { secretRef = { name = "azure-" + name; }; })
+                ++ (lib.optional (maskinCfg.enable or false) { secretRef = { name = "maskinporten-" + name; }; })
+                ++ (lib.optional (tokenxCfg.enable or false) { secretRef = { name = "tokenx-" + name; }; })
+              );
+              securityContext = {
+                allowPrivilegeEscalation = false;
+                readOnlyRootFilesystem = true;
+                runAsNonRoot = true;
+                capabilities.drop = [ "ALL" ];
+                seccompProfile.type = "RuntimeDefault";
+              };
+            }
+          ] else [])
           ++ (let v = vaultCfg; in
             if (v.enable or false) && (v.address or null) != null && (v.kvBasePath or null) != null && (v.authPath or null) != null then
               [
@@ -1483,6 +1560,8 @@ export default {
         ++ gcpBuckets
         ++ gcpCloudSql
         ++ azureApplication
+        ++ (lib.optional (tokenxCfg.enable or false) (mkJwker { inherit name namespace; labels = labelsWithAuth; annotations = annotations; accessPolicy = {}; secretName = "tokenx-" + name; }))
+        ++ (lib.optional (maskinCfg.enable or false) (mkMaskinportenClient { inherit name namespace; labels = labelsWithAuth; annotations = annotations; scopes = { consumed = (maskinCfg.scopes.consumed or []); exposed = (maskinCfg.scopes.exposed or []); }; secretName = "maskinporten-" + name; }))
         ++ frontendConfig;
     in {
       deployment = deployment;

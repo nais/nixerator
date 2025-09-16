@@ -34,6 +34,9 @@
             appPodSecurity
             appObservability
             appDefaultEnv
+            appTokenX
+            appMaskinporten
+            appTexas
             appWebproxy
             appLeaderElection
             appIntegrations
@@ -73,6 +76,9 @@
           appPodSecurity = import ./modules/ext/podsecurity.nix;
           appObservability = import ./modules/ext/observability.nix;
           appDefaultEnv = import ./modules/ext/defaultenv.nix;
+          appTokenX = import ./modules/ext/tokenx.nix;
+          appMaskinporten = import ./modules/ext/maskinporten.nix;
+          appTexas = import ./modules/ext/texas.nix;
           appWebproxy = import ./modules/ext/webproxy.nix;
           appLeaderElection = import ./modules/ext/leaderelection.nix;
           appIntegrations = import ./modules/ext/integrations.nix;
@@ -154,6 +160,9 @@
               appPodSecurity
               appObservability
               appDefaultEnv
+              appTokenX
+              appMaskinporten
+              appTexas
               appWebproxy
               appLeaderElection
               appIntegrations
@@ -265,6 +274,30 @@
             };
           in pkgs.writeText "manifest.yaml" eval.yaml;
 
+          # TokenX example
+          packages.manifests-tokenx = let
+            eval = nlib.evalAppModules {
+              modules = [ self.nixosModules.app self.nixosModules.appTokenX (import ./examples/app-tokenx.nix) ];
+              specialArgs = { inherit lib; };
+            };
+          in pkgs.writeText "manifest.yaml" eval.yaml;
+
+          # Maskinporten example
+          packages.manifests-maskinporten = let
+            eval = nlib.evalAppModules {
+              modules = [ self.nixosModules.app self.nixosModules.appMaskinporten (import ./examples/app-maskinporten.nix) ];
+              specialArgs = { inherit lib; };
+            };
+          in pkgs.writeText "manifest.yaml" eval.yaml;
+
+          # Texas example
+          packages.manifests-texas = let
+            eval = nlib.evalAppModules {
+              modules = [ self.nixosModules.app self.nixosModules.appTokenX self.nixosModules.appMaskinporten self.nixosModules.appTexas (import ./examples/app-texas.nix) ];
+              specialArgs = { inherit lib; };
+            };
+          in pkgs.writeText "manifest.yaml" eval.yaml;
+
           packages.manifests-vault-paths = let
             eval = nlib.evalAppModules {
               modules = [ self.nixosModules.app self.nixosModules.appVault (import ./examples/app-vault-paths.nix) ];
@@ -287,7 +320,7 @@
           # GCP CloudSQL example
           packages.manifests-gcp-cloudsql = let
             eval = nlib.evalAppModules {
-              modules = [ self.nixosModules.app self.nixosModules.appGcpCloudSQL (import ./examples/app-gcp-cloudsql.nix) ];
+              modules = [ self.nixosModules.app self.nixosModules.appGcpBuckets self.nixosModules.appGcpCloudSQL (import ./examples/app-gcp-cloudsql.nix) ];
               specialArgs = { inherit lib; };
             };
           in pkgs.writeText "manifest.yaml" eval.yaml;

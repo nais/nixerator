@@ -2,30 +2,27 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   annotations: {}
-  labels:
-    leader-election: enabled
-  name: leader
+  labels: {}
+  name: maskin
   namespace: default
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: leader
-      leader-election: enabled
+      app: maskin
   strategy:
     type: RollingUpdate
   template:
     metadata:
       labels:
-        app: leader
-        leader-election: enabled
+        app: maskin
     spec:
       containers:
-        - env:
-            - name: LEADER_ELECTION_ENABLED
-              value: "true"
+        - envFrom:
+            - secretRef:
+                name: maskinporten-maskin
           image: nginx:1.25
-          name: leader
+          name: maskin
           ports:
             - containerPort: 8080
               name: http
@@ -35,7 +32,7 @@ kind: Service
 metadata:
   annotations: {}
   labels: {}
-  name: leader
+  name: maskin
   namespace: default
 spec:
   ports:
@@ -43,5 +40,22 @@ spec:
       port: 80
       targetPort: 8080
   selector:
-    app: leader
+    app: maskin
   type: ClusterIP
+---
+apiVersion: nais.io/v1
+kind: MaskinportenClient
+metadata:
+  annotations: {}
+  labels: {}
+  name: maskin
+  namespace: default
+spec:
+  Scopes:
+    ConsumedScopes:
+      - scope:one
+      - scope:two
+    ExposedScopes:
+      - api/.default
+  SecretName: maskinporten-maskin
+
