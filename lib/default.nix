@@ -143,6 +143,27 @@ rec {
       };
     };
 
+  mkPDB = {
+    name,
+    namespace ? "default",
+    minAvailable ? null,
+    maxUnavailable ? null,
+    labels ? {},
+    annotations ? {}
+  }:
+    {
+      apiVersion = "policy/v1";
+      kind = "PodDisruptionBudget";
+      metadata = {
+        inherit name namespace;
+        labels = labels;
+        annotations = annotations;
+      };
+      spec = ({ selector.matchLabels = { app = name; }; }
+        // (lib.optionalAttrs (minAvailable != null) { inherit minAvailable; })
+        // (lib.optionalAttrs (maxUnavailable != null) { inherit maxUnavailable; }));
+    };
+
   mkSecret = {
     name,
     namespace ? "default",
@@ -159,6 +180,71 @@ rec {
     // (lib.optionalAttrs (data != {}) { inherit data; })
     // (lib.optionalAttrs (stringData != {}) { inherit stringData; }));
 
+  mkServiceAccount = {
+    name,
+    namespace ? "default",
+    annotations ? {},
+    labels ? {}
+  }:
+    {
+      apiVersion = "v1";
+      kind = "ServiceAccount";
+      metadata = { inherit name namespace annotations labels; };
+    };
+
+  mkConfigMap = {
+    name,
+    namespace ? "default",
+    data ? {},
+    labels ? {},
+    annotations ? {}
+  }:
+    {
+      apiVersion = "v1";
+      kind = "ConfigMap";
+      metadata = { inherit name namespace labels annotations; };
+      data = data;
+    };
+
+  mkNetworkPolicy = {
+    name,
+    namespace ? "default",
+    policyTypes ? [ "Ingress" "Egress" ],
+    podSelector ? { app = name; },
+    ingress ? [],
+    egress ? [],
+    labels ? {},
+    annotations ? {}
+  }:
+    {
+      apiVersion = "networking.k8s.io/v1";
+      kind = "NetworkPolicy";
+      metadata = { inherit name namespace labels annotations; };
+      spec = {
+        podSelector.matchLabels = podSelector;
+        policyTypes = policyTypes;
+      } // (lib.optionalAttrs (ingress != []) { inherit ingress; })
+        // (lib.optionalAttrs (egress != []) { inherit egress; });
+    };
+
+  mkServiceMonitor = {
+    name,
+    namespace ? "default",
+    endpoints ? [ { port = "http"; path = "/metrics"; } ],
+    selector ? { matchLabels = { app = name; }; },
+    labels ? {},
+    annotations ? {}
+  }:
+    {
+      apiVersion = "monitoring.coreos.com/v1";
+      kind = "ServiceMonitor";
+      metadata = { inherit name namespace labels annotations; };
+      spec = {
+        inherit selector endpoints;
+        namespaceSelector = {};
+      };
+    };
+
   renderManifests = manifests:
     lib.concatStringsSep "\n---\n" (map toYaml manifests);
 
@@ -173,6 +259,11 @@ rec {
       ingressCfg = cfg.ingress;
       hpaCfg = cfg.hpa;
       secretsCfg = cfg.secrets or {};
+      pdbCfg = cfg.pdb or { enable = false; };
+      saCfg = cfg.serviceAccount or { enable = false; };
+      cmCfg = cfg.configMaps or {};
+      npCfg = cfg.networkPolicy or { enable = false; };
+      promCfg = cfg.prometheus or { enable = false; };
       deployment = mkDeployment {
         inherit name namespace labels annotations;
         image = cfg.image;
@@ -199,6 +290,30 @@ rec {
         maxReplicas = hpaCfg.maxReplicas;
         targetCPUUtilizationPercentage = hpaCfg.targetCPUUtilizationPercentage;
       });
+      pdb = lib.optional (pdbCfg.enable or false) (mkPDB ({ inherit name namespace labels annotations; }
+        // (lib.optionalAttrs (pdbCfg ? minAvailable) { minAvailable = pdbCfg.minAvailable; })
+        // (lib.optionalAttrs (pdbCfg ? maxUnavailable) { maxUnavailable = pdbCfg.maxUnavailable; })));
+      serviceAccount = lib.optional (saCfg.enable or false) (mkServiceAccount {
+        inherit namespace;
+        name = saCfg.name or name;
+        annotations = saCfg.annotations or {};
+        labels = labels;
+      });
+      configMaps = lib.mapAttrsToList (n: cm: mkConfigMap {
+        name = n;
+        inherit namespace;
+        data = cm.data or {};
+        labels = labels;
+        annotations = annotations;
+      }) cmCfg;
+      networkPolicy = lib.optional (npCfg.enable or false) (mkNetworkPolicy ({ inherit name namespace labels annotations; }
+        // (lib.optionalAttrs (npCfg ? policyTypes) { policyTypes = npCfg.policyTypes; })
+        // (lib.optionalAttrs (npCfg ? podSelector) { podSelector = npCfg.podSelector; })
+        // (lib.optionalAttrs (npCfg ? ingress) { ingress = npCfg.ingress; })
+        // (lib.optionalAttrs (npCfg ? egress) { egress = npCfg.egress; })));
+      serviceMonitor = lib.optional (promCfg.enable or false) (mkServiceMonitor ({ inherit name namespace labels annotations; }
+        // (lib.optionalAttrs (promCfg ? endpoints) { endpoints = promCfg.endpoints; })
+        // (lib.optionalAttrs (promCfg ? selector) { selector = promCfg.selector; })));
       secrets = lib.mapAttrsToList (n: s: mkSecret ({
         name = n;
         inherit namespace;
@@ -209,13 +324,23 @@ rec {
         ++ service
         ++ ingress
         ++ hpa
-        ++ secrets;
+        ++ pdb
+        ++ serviceAccount
+        ++ networkPolicy
+        ++ serviceMonitor
+        ++ secrets
+        ++ configMaps;
     in {
       deployment = deployment;
       service = if service == [] then null else lib.head service;
       ingress = if ingress == [] then null else lib.head ingress;
       hpa = if hpa == [] then null else lib.head hpa;
       secrets = secrets;
+      pdb = if pdb == [] then null else lib.head pdb;
+      serviceAccount = if serviceAccount == [] then null else lib.head serviceAccount;
+      networkPolicy = if networkPolicy == [] then null else lib.head networkPolicy;
+      serviceMonitor = if serviceMonitor == [] then null else lib.head serviceMonitor;
+      configMaps = configMaps;
       manifests = res;
       yaml = renderManifests res;
     };

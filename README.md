@@ -6,17 +6,18 @@ Quick start
 
 Modules workflow (recommended)
 - Evaluate module to manifests: `nix build .#manifests-module-basic && cat result`
+- Extended resources: `nix build .#manifests-module-extended && cat result`
 - Generate module docs (Org): `nix build .#docs-org && sed -n '1,80p' result`
 
 The module lives at `nixosModules.app` and can be evaluated with `lib.evalModules`. Use `lib.evalAppModules { modules = [ self.nixosModules.app yourModule ]; }` to get `cfg`, `options`, `resources`, and `yaml`.
 
 What’s inside
-- `flake.nix` exposes the typed application module and builds `manifests-basic` by evaluating it.
-- `lib/default.nix` provides helpers: `mkDeployment`, `mkService`, `mkIngress`, `mkHPA`, `mkSecret`, `mkApp`, `evalAppModules`, and `renderManifests`.
-- `modules/app.nix` defines the application interface (typed NixOS-style module).
-- `examples/app-basic.nix` is a module config demonstrating the interface.
- - `modules/app.nix` defines a NixOS-style module with typed options under `app.*`.
- - `examples/app-basic.nix` is a module config demonstrating the typed interface.
+- `flake.nix` exposes the typed application module and builds `manifests-basic` by evaluating it. It also exposes extension modules and an extended example.
+- `lib/default.nix` provides helpers: `mkDeployment`, `mkService`, `mkIngress`, `mkHPA`, `mkSecret`, `mkPDB`, `mkServiceAccount`, `mkConfigMap`, `mkNetworkPolicy`, `mkServiceMonitor`, `mkApp`, `evalAppModules`, and `renderManifests`.
+- `modules/app.nix` defines the core application interface (typed NixOS-style module).
+- `modules/ext/*.nix` add resourcecreator-style features: `pdb`, `serviceAccount`, `configMaps`, `networkPolicy`, `prometheus`.
+- `examples/app-basic.nix` is a module config demonstrating the core interface.
+- `examples/app-extended.nix` demonstrates the extended interface (PDB, SA, ConfigMap, NetworkPolicy, ServiceMonitor).
 
 Docs generation
 - `lib.orgDocsFromOptions` and `lib.orgDocsFromEval` turn the evaluated options tree into an Emacs Org file listing option names, types, defaults, and descriptions.
@@ -24,7 +25,7 @@ Docs generation
 Testing and goldens
 - Run tests: `make test` (builds manifests via flake and diffs against `tests/golden/*.yaml`).
 - Update goldens: `make update-golden` (or `UPDATE_GOLDEN=1 tests/run.sh`).
-- Flake checks: `nix flake check` runs golden comparison and kubeconform validation for both `manifests-basic` and `manifests-module-basic`.
+- Flake checks: `nix flake check` runs golden comparison and kubeconform validation for `manifests-basic`, `manifests-module-basic`, and `manifests-module-extended`.
 - Dev shell includes `kubeconform` and `yq` for local validation if you want to run it manually.
 
 Notes on kubeconform

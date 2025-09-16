@@ -11,6 +11,7 @@ RESULT="result"
 
 OUTPUT=${OUTPUT:-manifests-basic}
 MODULE_OUTPUT=${MODULE_OUTPUT:-manifests-module-basic}
+MODULE_EXT_OUTPUT=${MODULE_EXT_OUTPUT:-manifests-module-extended}
 
 YQ=${YQ:-yq}
 
@@ -62,5 +63,6 @@ build_and_check() {
 
 build_and_check "$OUTPUT" "${OUTPUT}.yaml"
 build_and_check "$MODULE_OUTPUT" "${MODULE_OUTPUT}.yaml"
+build_and_check "$MODULE_EXT_OUTPUT" "${MODULE_EXT_OUTPUT}.yaml"
 
 echo "All tests passed."

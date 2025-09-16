@@ -4,17 +4,19 @@ SHELL := bash
 FLAKE ?= .
 OUTPUT ?= manifests-basic
 MODULE_OUTPUT ?= manifests-module-basic
+MODULE_EXT_OUTPUT ?= manifests-module-extended
 DOC_OUTPUT ?= docs-org
 
 # Common paths
 RESULT := result
 MANIFEST := manifests.yaml
 MANIFEST_MODULE := manifests-module.yaml
+MANIFEST_MODULE_EXT := manifests-module-extended.yaml
 DOC := nixerator-options.org
 
-.PHONY: help all build print build-module print-module show fmt check dev \
-        manifests manifests-module apply apply-result docs print-docs \
-        test update-golden clean
+.PHONY: help all build print build-module print-module build-module-ext print-module-ext \
+        show fmt check dev manifests manifests-module manifests-module-ext \
+        apply apply-result docs print-docs test update-golden clean
 
 help: ## Show this help.
 	@awk 'BEGIN {FS = ":.*##"; printf "Available targets\n-----------------\n"} /^[a-zA-Z0-9_.-]+:.*?##/ { printf "  %-24s %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
@@ -37,6 +39,14 @@ print-module: ## Print YAML from ./result (built via MODULE_OUTPUT).
 	@echo
 	@cat $(RESULT)
 
+build-module-ext: ## Build extended module-evaluated manifests (MODULE_EXT_OUTPUT=$(MODULE_EXT_OUTPUT)).
+	nix build $(FLAKE)#$(MODULE_EXT_OUTPUT)
+
+print-module-ext: ## Print YAML from ./result (built via MODULE_EXT_OUTPUT).
+	@test -e $(RESULT) || { echo "Run 'make build-module-ext' first"; exit 1; }
+	@echo
+	@cat $(RESULT)
+
 show: ## Show flake outputs.
 	nix flake show $(FLAKE)
 
@@ -56,6 +66,10 @@ manifests: build ## Copy built YAML to ./manifests.yaml.
 manifests-module: build-module ## Copy module-built YAML to ./manifests-module.yaml.
 	cp -f $(RESULT) $(MANIFEST_MODULE)
 	@echo "Wrote $(MANIFEST_MODULE)"
+
+manifests-module-ext: build-module-ext ## Copy extended module-built YAML to ./$(MANIFEST_MODULE_EXT).
+	cp -f $(RESULT) $(MANIFEST_MODULE_EXT)
+	@echo "Wrote $(MANIFEST_MODULE_EXT)"
 
 apply: manifests ## Apply manifests.yaml with kubectl.
 	kubectl apply -f $(MANIFEST)

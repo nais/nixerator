@@ -18,6 +18,11 @@
         # Expose the app module for consumers
         nixosModules = {
           app = import ./modules/app.nix;
+          appPDB = import ./modules/ext/pdb.nix;
+          appServiceAccount = import ./modules/ext/serviceaccount.nix;
+          appConfigMap = import ./modules/ext/configmap.nix;
+          appNetworkPolicy = import ./modules/ext/networkpolicy.nix;
+          appPrometheus = import ./modules/ext/prometheus.nix;
         };
       }
       // flake-utils.lib.eachDefaultSystem (system:
@@ -38,6 +43,22 @@
           packages.manifests-module-basic = let
             eval = nlib.evalAppModules {
               modules = [ self.nixosModules.app (import ./examples/app-basic.nix) ];
+              specialArgs = { inherit lib; };
+            };
+          in pkgs.writeText "manifest.yaml" eval.yaml;
+
+          # Extended example with additional resource creators
+          packages.manifests-module-extended = let
+            eval = nlib.evalAppModules {
+              modules = [
+                self.nixosModules.app
+                self.nixosModules.appPDB
+                self.nixosModules.appServiceAccount
+                self.nixosModules.appConfigMap
+                self.nixosModules.appNetworkPolicy
+                self.nixosModules.appPrometheus
+                (import ./examples/app-extended.nix)
+              ];
               specialArgs = { inherit lib; };
             };
           in pkgs.writeText "manifest.yaml" eval.yaml;
@@ -83,6 +104,14 @@
           checks.kubeconform-module-basic = pkgs.runCommand "kubeconform-module-basic" {
             buildInputs = [ pkgs.kubeconform ];
             src = self.packages.${system}.manifests-module-basic;
+          } ''
+            set -euo pipefail
+            kubeconform -strict -ignore-missing-schemas -summary -output pretty -exit-on-error - < "$src" > "$out"
+          '';
+
+          checks.kubeconform-module-extended = pkgs.runCommand "kubeconform-module-extended" {
+            buildInputs = [ pkgs.kubeconform ];
+            src = self.packages.${system}.manifests-module-extended;
           } ''
             set -euo pipefail
             kubeconform -strict -ignore-missing-schemas -summary -output pretty -exit-on-error - < "$src" > "$out"
