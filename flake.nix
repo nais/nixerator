@@ -22,6 +22,8 @@
               appServiceAccount
               appConfigMap
               appNetworkPolicy
+              appAccessPolicy
+              appFQDNPolicy
               appPrometheus
             ];
             mkConfigModule = appCfg: { lib, ... }: { config.app = appCfg; };
@@ -52,6 +54,8 @@
           appServiceAccount = import ./modules/ext/serviceaccount.nix;
           appConfigMap = import ./modules/ext/configmap.nix;
           appNetworkPolicy = import ./modules/ext/networkpolicy.nix;
+          appAccessPolicy = import ./modules/ext/accesspolicy.nix;
+          appFQDNPolicy = import ./modules/ext/fqdnpolicy.nix;
           appPrometheus = import ./modules/ext/prometheus.nix;
         };
       }
@@ -86,9 +90,32 @@
                 self.nixosModules.appServiceAccount
                 self.nixosModules.appConfigMap
                 self.nixosModules.appNetworkPolicy
+                self.nixosModules.appAccessPolicy
+                self.nixosModules.appFQDNPolicy
                 self.nixosModules.appPrometheus
                 (import ./examples/app-extended.nix)
               ];
+              specialArgs = { inherit lib; };
+            };
+          in pkgs.writeText "manifest.yaml" eval.yaml;
+
+          # AccessPolicy + FQDNPolicy example
+          packages.manifests-accesspolicy = let
+            eval = nlib.evalAppModules {
+              modules = [
+                self.nixosModules.app
+                self.nixosModules.appAccessPolicy
+                self.nixosModules.appFQDNPolicy
+                (import ./examples/app-access.nix)
+              ];
+              specialArgs = { inherit lib; };
+            };
+          in pkgs.writeText "manifest.yaml" eval.yaml;
+
+          # Advanced example: filesFrom PVC/EmptyDir, preStop, strategy
+          packages.manifests-advanced = let
+            eval = nlib.evalAppModules {
+              modules = [ self.nixosModules.app (import ./examples/app-advanced.nix) ];
               specialArgs = { inherit lib; };
             };
           in pkgs.writeText "manifest.yaml" eval.yaml;
@@ -101,10 +128,12 @@
               appServiceAccount
               appConfigMap
               appNetworkPolicy
+              appAccessPolicy
+              appFQDNPolicy
               appPrometheus
             ];
             eval = lib.evalModules { modules = docModules; specialArgs = { inherit lib; }; };
-            org = nlib.orgDocsFancyFromEval eval;
+            org = nlib.orgDocsNoTableFromEval eval;
           in pkgs.writeText "nixerator-options.org" org;
 
           # Also expose the simpler docs if desired

@@ -25,8 +25,23 @@ What’s inside
 - `lib/default.nix` provides helpers: `mkDeployment`, `mkService`, `mkIngress`, `mkHPA`, `mkSecret`, `mkPDB`, `mkServiceAccount`, `mkConfigMap`, `mkNetworkPolicy`, `mkServiceMonitor`, `mkApp`, `evalAppModules`, and `renderManifests`.
 - `modules/app.nix` defines the core application interface (typed NixOS-style module).
 - `modules/ext/*.nix` add resourcecreator-style features: `pdb`, `serviceAccount`, `configMaps`, `networkPolicy`, `prometheus`.
+  - New: `accessPolicy` for high-level inbound/outbound rules that render a NetworkPolicy named `${app}-access`.
 - `examples/app-basic.nix` is a module config demonstrating the core interface.
 - `examples/app-extended.nix` demonstrates the extended interface (PDB, SA, ConfigMap, NetworkPolicy, ServiceMonitor).
+
+Recently added toward Naiserator parity
+- Probes: `probes.liveness|readiness|startup` (HTTP, timing fields, optional port).
+- Resources: `resources.requests/limits` for cpu/memory strings.
+- envFrom: `envFrom` supports ConfigMaps and Secrets.
+- filesFrom: `filesFrom` mounts ConfigMaps/Secrets/PVC/EmptyDir at `mountPath`.
+- Command, image pull secrets, terminationGracePeriodSeconds on Pod.
+- Access policy: `accessPolicy.enable = true;` with `inbound.allowSameNamespace`, `inbound.allowedNamespaces`, `inbound.allowedApps`, and `outbound.allowAll/allowedNamespaces/allowedCIDRs/allowedPorts/allowDNS`.
+  - Example: `nix build .#manifests-accesspolicy && cat result` (see `examples/app-access.nix`).
+- FQDNPolicy (GKE CRD): `fqdnPolicy.enable = true; fqdnPolicy.rules = [ { host = "api.github.com"; ports = [443]; } ];`.
+  - Also: `accessPolicy.outbound.allowedFQDNs` auto-feeds FQDN rules when `accessPolicy.enable = true`.
+- Lifecycle preStop hooks: `preStop.exec.command = ["..."]` or `preStop.http.{path,port}`.
+- Deployment strategy: `strategy.type = "Recreate"|"RollingUpdate"` with `strategy.rollingUpdate.{maxSurge,maxUnavailable}`.
+  - Example: `nix build .#manifests-advanced && cat result` (see `examples/app-advanced.nix`).
 
 Docs generation
 - `lib.orgDocsFromOptions` and `lib.orgDocsFromEval` turn the evaluated options tree into an Emacs Org file listing option names, types, defaults, and descriptions.

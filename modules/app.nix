@@ -34,6 +34,32 @@ in
       example = { FOO = "bar"; LOG_LEVEL = "info"; };
     };
 
+    command = lib.mkOption {
+      type = types.listOf types.str;
+      default = [];
+      description = "Container entrypoint command array (optional).";
+      example = ["/bin/myapp" "--serve"];
+    };
+
+    resources = lib.mkOption {
+      type = types.submodule ({ ... }: { options = {
+        limits = lib.mkOption {
+          type = types.attrsOf types.str;
+          default = {};
+          description = "Resource limits (e.g., cpu = \"500m\", memory = \"256Mi\").";
+          example = { cpu = "500m"; memory = "512Mi"; };
+        };
+        requests = lib.mkOption {
+          type = types.attrsOf types.str;
+          default = {};
+          description = "Resource requests (e.g., cpu = \"100m\", memory = \"128Mi\").";
+          example = { cpu = "100m"; memory = "128Mi"; };
+        };
+      }; });
+      default = { limits = {}; requests = {}; };
+      description = "Container resource requests/limits.";
+    };
+
     labels = lib.mkOption {
       type = types.attrsOf types.str;
       default = {};
@@ -44,6 +70,12 @@ in
       type = types.attrsOf types.str;
       default = {};
       description = "Additional annotations applied to all resources.";
+    };
+
+    imagePullSecrets = lib.mkOption {
+      type = types.listOf types.str;
+      default = [];
+      description = "List of imagePullSecret names to attach to the Pod spec.";
     };
 
     service = {
@@ -124,6 +156,118 @@ in
       };
     };
 
+    probes = {
+      liveness = lib.mkOption {
+        type = types.submodule ({ ... }: { options = {
+          path = lib.mkOption { type = types.str; default = ""; description = "HTTP path for liveness probe (empty disables)."; };
+          port = lib.mkOption { type = types.nullOr types.int; default = null; description = "Optional port override for liveness probe."; };
+          initialDelaySeconds = lib.mkOption { type = types.int; default = 0; description = "Initial delay before first probe."; };
+          periodSeconds = lib.mkOption { type = types.int; default = 10; description = "Probe period seconds."; };
+          timeoutSeconds = lib.mkOption { type = types.int; default = 1; description = "Probe timeout seconds."; };
+          failureThreshold = lib.mkOption { type = types.int; default = 3; description = "Failure threshold."; };
+        }; });
+        default = { path = ""; port = null; initialDelaySeconds = 0; periodSeconds = 10; timeoutSeconds = 1; failureThreshold = 3; };
+        description = "Container liveness probe configuration.";
+      };
+      readiness = lib.mkOption {
+        type = types.submodule ({ ... }: { options = {
+          path = lib.mkOption { type = types.str; default = ""; description = "HTTP path for readiness probe (empty disables)."; };
+          port = lib.mkOption { type = types.nullOr types.int; default = null; description = "Optional port override for readiness probe."; };
+          initialDelaySeconds = lib.mkOption { type = types.int; default = 0; description = "Initial delay before first probe."; };
+          periodSeconds = lib.mkOption { type = types.int; default = 10; description = "Probe period seconds."; };
+          timeoutSeconds = lib.mkOption { type = types.int; default = 1; description = "Probe timeout seconds."; };
+          failureThreshold = lib.mkOption { type = types.int; default = 3; description = "Failure threshold."; };
+        }; });
+        default = { path = ""; port = null; initialDelaySeconds = 0; periodSeconds = 10; timeoutSeconds = 1; failureThreshold = 3; };
+        description = "Container readiness probe configuration.";
+      };
+      startup = lib.mkOption {
+        type = types.submodule ({ ... }: { options = {
+          path = lib.mkOption { type = types.str; default = ""; description = "HTTP path for startup probe (empty disables)."; };
+          port = lib.mkOption { type = types.nullOr types.int; default = null; description = "Optional port override for startup probe."; };
+          initialDelaySeconds = lib.mkOption { type = types.int; default = 0; description = "Initial delay before first probe."; };
+          periodSeconds = lib.mkOption { type = types.int; default = 10; description = "Probe period seconds."; };
+          timeoutSeconds = lib.mkOption { type = types.int; default = 1; description = "Probe timeout seconds."; };
+          failureThreshold = lib.mkOption { type = types.int; default = 3; description = "Failure threshold."; };
+        }; });
+        default = { path = ""; port = null; initialDelaySeconds = 0; periodSeconds = 10; timeoutSeconds = 1; failureThreshold = 3; };
+        description = "Container startup probe configuration.";
+      };
+    };
+
+    envFrom = lib.mkOption {
+      type = types.listOf (types.submodule ({ ... }: { options = {
+        configMap = lib.mkOption { type = types.str; default = ""; description = "ConfigMap name to import environment from."; };
+        secret = lib.mkOption { type = types.str; default = ""; description = "Secret name to import environment from."; };
+      }; }));
+      default = [];
+      description = "Populate env from ConfigMaps/Secrets using envFrom.";
+      example = [ { configMap = "app-config"; } { secret = "app-secret"; } ];
+    };
+
+    filesFrom = lib.mkOption {
+      type = types.listOf (types.submodule ({ ... }: { options = {
+        configMap = lib.mkOption { type = types.str; default = ""; description = "ConfigMap name to mount as files (mutually exclusive with secret/persistentVolumeClaim/emptyDir)."; };
+        secret = lib.mkOption { type = types.str; default = ""; description = "Secret name to mount as files (mutually exclusive with configMap/persistentVolumeClaim/emptyDir)."; };
+        persistentVolumeClaim = lib.mkOption { type = types.str; default = ""; description = "PVC claim name to mount (mutually exclusive with configMap/secret/emptyDir)."; };
+        emptyDir = lib.mkOption {
+          type = types.nullOr (types.submodule ({ ... }: { options = {
+            medium = lib.mkOption { type = types.nullOr types.str; default = null; description = "Set to 'Memory' to use tmpfs; null or empty for disk-backed."; };
+          }; }));
+          default = null;
+          description = "Use an EmptyDir volume at the mount path (mutually exclusive with configMap/secret/persistentVolumeClaim).";
+        };
+        mountPath = lib.mkOption { type = types.str; description = "Mount path for files."; };
+        readOnly = lib.mkOption { type = types.nullOr types.bool; default = null; description = "Mount readOnly flag; defaults true for ConfigMap/Secret and false for PVC/EmptyDir."; };
+      }; }));
+      default = [];
+      description = "Mount files from ConfigMaps/Secrets at given paths.";
+    };
+
+    strategy = {
+      type = lib.mkOption {
+        type = types.str;
+        default = "RollingUpdate";
+        description = "Deployment strategy type: RollingUpdate or Recreate.";
+      };
+      rollingUpdate = lib.mkOption {
+        type = types.nullOr (types.submodule ({ ... }: { options = {
+          maxSurge = lib.mkOption { type = types.nullOr (types.oneOf [ types.int types.str ]); default = null; description = "Max surge during rolling update (int or percentage string)."; };
+          maxUnavailable = lib.mkOption { type = types.nullOr (types.oneOf [ types.int types.str ]); default = null; description = "Max unavailable during rolling update (int or percentage string)."; };
+        }; }));
+        default = null;
+        description = "RollingUpdate tunables; only used when type=RollingUpdate.";
+      };
+    };
+
+    preStop = lib.mkOption {
+      type = types.nullOr (types.submodule ({ ... }: { options = {
+        exec = lib.mkOption {
+          type = types.nullOr (types.submodule ({ ... }: { options = {
+            command = lib.mkOption { type = types.listOf types.str; default = []; description = "PreStop exec command."; };
+          }; }));
+          default = null;
+          description = "Exec-based preStop handler.";
+        };
+        http = lib.mkOption {
+          type = types.nullOr (types.submodule ({ ... }: { options = {
+            path = lib.mkOption { type = types.str; default = ""; description = "HTTP path for preStop handler."; };
+            port = lib.mkOption { type = types.nullOr types.int; default = null; description = "HTTP port for preStop (defaults to service targetPort)."; };
+          }; }));
+          default = null;
+          description = "HTTP-based preStop handler.";
+        };
+      }; }));
+      default = null;
+      description = "Container preStop lifecycle hook (exec or http).";
+    };
+
+    terminationGracePeriodSeconds = lib.mkOption {
+      type = types.nullOr types.int;
+      default = null;
+      description = "Pod terminationGracePeriodSeconds (null leaves default).";
+    };
+
     secrets = lib.mkOption {
       type = types.attrsOf (types.submodule ({...}: { options = {
         type = lib.mkOption { type = types.str; default = "Opaque"; description = "Kubernetes Secret type."; };
@@ -138,4 +282,3 @@ in
     };
   };
 }
-

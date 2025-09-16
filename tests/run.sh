@@ -12,6 +12,8 @@ RESULT="result"
 OUTPUT=${OUTPUT:-manifests-basic}
 MODULE_OUTPUT=${MODULE_OUTPUT:-manifests-module-basic}
 MODULE_EXT_OUTPUT=${MODULE_EXT_OUTPUT:-manifests-module-extended}
+ACCESS_OUTPUT=${ACCESS_OUTPUT:-manifests-accesspolicy}
+ADV_OUTPUT=${ADV_OUTPUT:-manifests-advanced}
 
 YQ=${YQ:-yq}
 
@@ -64,5 +66,7 @@ build_and_check() {
 build_and_check "$OUTPUT" "${OUTPUT}.yaml"
 build_and_check "$MODULE_OUTPUT" "${MODULE_OUTPUT}.yaml"
 build_and_check "$MODULE_EXT_OUTPUT" "${MODULE_EXT_OUTPUT}.yaml"
+build_and_check "$ACCESS_OUTPUT" "${ACCESS_OUTPUT}.yaml"
+build_and_check "$ADV_OUTPUT" "${ADV_OUTPUT}.yaml"
 
 echo "All tests passed."
