@@ -95,7 +95,15 @@
 
           # Generate Emacs Org docs for the module options
           packages.docs-org = let
-            eval = lib.evalModules { modules = [ self.nixosModules.app ]; specialArgs = { inherit lib; }; };
+            docModules = with self.nixosModules; [
+              app
+              appPDB
+              appServiceAccount
+              appConfigMap
+              appNetworkPolicy
+              appPrometheus
+            ];
+            eval = lib.evalModules { modules = docModules; specialArgs = { inherit lib; }; };
             org = nlib.orgDocsFancyFromEval eval;
           in pkgs.writeText "nixerator-options.org" org;
 

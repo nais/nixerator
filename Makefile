@@ -16,7 +16,7 @@ DOC := nixerator-options.org
 
 .PHONY: help all build print build-module print-module build-module-ext print-module-ext \
         show fmt check dev manifests manifests-module manifests-module-ext \
-        apply apply-result docs print-docs test update-golden clean
+        apply apply-result docs print-docs print-json test update-golden clean
 
 help: ## Show this help.
 	@awk 'BEGIN {FS = ":.*##"; printf "Available targets\n-----------------\n"} /^[a-zA-Z0-9_.-]+:.*?##/ { printf "  %-24s %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
@@ -30,6 +30,18 @@ print: ## Print YAML from ./result (built via OUTPUT).
 	@test -e $(RESULT) || { echo "Run 'make build' first"; exit 1; }
 	@echo
 	@cat $(RESULT)
+
+print-json: ## Print pretty JSON, '---' delimited, from ./result.
+	@test -e $(RESULT) || { echo "Run 'make build' or 'make build-module' first"; exit 1; }
+	@command -v yq >/dev/null 2>&1 || { echo "yq not found; enter dev shell (make dev)"; exit 1; }
+	@i=0; first=1; \
+	while true; do \
+	  out=$$(yq -o=json -I 2 'select(documentIndex == $$i)' $(RESULT) 2>/dev/null); \
+	  if [ -z "$$out" ]; then break; fi; \
+	  if [ $$first -eq 0 ]; then printf "\n---\n"; fi; \
+	  printf "%s\n" "$$out"; \
+	  first=0; i=$$((i+1)); \
+	done
 
 build-module: ## Build module-evaluated manifests (MODULE_OUTPUT=$(MODULE_OUTPUT)).
 	nix build $(FLAKE)#$(MODULE_OUTPUT)

@@ -3,7 +3,7 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.05";
-    nixerator.url = "path:.."; # replace with github:org/nixerator when publishing
+    nixerator.url = "github:nais/nixerator";
   };
 
   outputs = { self, nixpkgs, nixerator }:

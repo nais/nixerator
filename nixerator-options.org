@@ -1,110 +1,59 @@
-#+TITLE: Nixerator App Module Options
+#+TITLE: Nixerator Application Module Options
+#+OPTIONS: toc:2 num:t
+#+TOC: headlines 2
 
-* annotations
-  - Type: attrsOf
-  - Default: {}
-  - Description: Additional annotations applied to all resources.
+This document lists the available options for the Nixerator application module,
+grouped by area. Values show types, defaults, and examples when available.
 
-* env
-  - Type: attrsOf
-  - Default: {}
-  - Description: Environment variables as attrset of strings.
-  - Example: {"FOO":"bar","LOG_LEVEL":"info"}
+* Usage
+#+BEGIN_SRC nix
+nixerator.lib.simple.yamlFromApp {
+  name = "myapp";
+  namespace = "default";
+  image = "repo/image:tag";
+  replicas = 2;
+  service.enable = true;
+  ingress.enable = true; ingress.host = "myapp.example.com";
+  hpa.enable = true; hpa.maxReplicas = 4;
+  pdb.enable = true; pdb.minAvailable = 1;
+  serviceAccount.enable = true;
+}
+#+END_SRC
 
-* hpa.enable
-  - Type: bool
-  - Default: false
-  - Description: Enable HorizontalPodAutoscaler for the deployment.
+* Options
+** Core
+| Option | Type | Default | Description | Example |
+|-|--|--|--|-|
+| annotations | attrsOf | {} | Additional annotations applied to all resources. |  |
+| env | attrsOf | {} | Environment variables as attrset of strings. | {"FOO":"bar","LOG_LEVEL":"info"} |
+| image | str | - | Container image, e.g. nginx:1.25. |  |
+| labels | attrsOf | {} | Additional labels applied to all resources. |  |
+| name | str | - | Application name; used for labels and resource names. |  |
+| namespace | str | default | Kubernetes namespace for all resources. |  |
+| replicas | int | 1 | Deployment replica count. |  |
+| secrets | attrsOf | {} | Secrets to create, as an attrset keyed by secret name. | {"my-secret":{"stringData":{"PASSWORD":"s3cr3t"}}} |
 
-* hpa.maxReplicas
-  - Type: int
-  - Default: -
-  - Description: Maximum replicas.
-  - Example: 5
+** Hpa
+| Option | Type | Default | Description | Example |
+|-|--|--|--|-|
+| enable | bool | false | Enable HorizontalPodAutoscaler for the deployment. |  |
+| maxReplicas | int | - | Maximum replicas. | 5 |
+| minReplicas | int | 1 | Minimum replicas. |  |
+| targetCPUUtilizationPercentage | int | 80 | CPU target utilization percentage. |  |
 
-* hpa.minReplicas
-  - Type: int
-  - Default: 1
-  - Description: Minimum replicas.
+** Ingress
+| Option | Type | Default | Description | Example |
+|-|--|--|--|-|
+| enable | bool | false | Expose the app via an Ingress rule. |  |
+| host | nullOr | null | Ingress host (required if enabled). | hello.local |
+| path | str | / | Ingress path. |  |
+| pathType | str | Prefix | Ingress pathType. |  |
+| tls | nullOr | null | Optional TLS entries for the ingress. |  |
 
-* hpa.targetCPUUtilizationPercentage
-  - Type: int
-  - Default: 80
-  - Description: CPU target utilization percentage.
-
-* image
-  - Type: str
-  - Default: -
-  - Description: Container image, e.g. nginx:1.25.
-
-* ingress.enable
-  - Type: bool
-  - Default: false
-  - Description: Expose the app via an Ingress rule.
-
-* ingress.host
-  - Type: nullOr
-  - Default: null
-  - Description: Ingress host (required if enabled).
-  - Example: hello.local
-
-* ingress.path
-  - Type: str
-  - Default: /
-  - Description: Ingress path.
-
-* ingress.pathType
-  - Type: str
-  - Default: Prefix
-  - Description: Ingress pathType.
-
-* ingress.tls
-  - Type: nullOr
-  - Default: null
-  - Description: Optional TLS entries for the ingress.
-
-* labels
-  - Type: attrsOf
-  - Default: {}
-  - Description: Additional labels applied to all resources.
-
-* name
-  - Type: str
-  - Default: -
-  - Description: Application name; used for labels and resource names.
-
-* namespace
-  - Type: str
-  - Default: default
-  - Description: Kubernetes namespace for all resources.
-
-* replicas
-  - Type: int
-  - Default: 1
-  - Description: Deployment replica count.
-
-* secrets
-  - Type: attrsOf
-  - Default: {}
-  - Description: Secrets to create, as an attrset keyed by secret name.
-  - Example: {"my-secret":{"stringData":{"PASSWORD":"s3cr3t"}}}
-
-* service.enable
-  - Type: bool
-  - Default: true
-  - Description: Expose the app via a ClusterIP Service.
-
-* service.port
-  - Type: int
-  - Default: 80
-  - Description: Service port number.
-
-* service.targetPort
-  - Type: int
-  - Default: 8080
-  - Description: Container port to target.
-
-* service.type
-  - Type: str
-  - Default: ClusterIP
-  - Description: Service type (ClusterIP, NodePort, LoadBalancer).
+** Service
+| Option | Type | Default | Description | Example |
+|-|--|--|--|-|
+| enable | bool | true | Expose the app via a ClusterIP Service. |  |
+| port | int | 80 | Service port number. |  |
+| targetPort | int | 8080 | Container port to target. |  |
+| type | str | ClusterIP | Service type (ClusterIP, NodePort, LoadBalancer). |  |

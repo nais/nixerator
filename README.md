@@ -3,6 +3,7 @@ Nixerator is a Nix flake that helps you define common Kubernetes resources (Depl
 Quick start
 - Prereqs: Nix with flakes enabled.
 - Build example manifests (application module): `nix build .#manifests-basic && echo && cat result`
+ - Pretty JSON view: `make print-json` (after a build)
 
 Simple consumption (as a library)
 - In your flake, add input `nixerator` and build YAML from a plain attrset:
