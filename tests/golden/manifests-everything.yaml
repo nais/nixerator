@@ -1,4 +1,399 @@
-# Placeholder golden for the kitchen-sink example; run UPDATE_GOLDEN=1 tests/run.sh to refresh.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    euthanaisa.nais.io/ttl: 24h
+    reloader.stakater.com/search: "true"
+  labels:
+    euthanaisa.nais.io/enabled: "true"
+    team: default
+  name: kitchen-sink
+  namespace: default
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: kitchen-sink
+      euthanaisa.nais.io/enabled: "true"
+      team: default
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 0
+    type: RollingUpdate
+  template:
+    metadata:
+      annotations:
+        kubectl.kubernetes.io/default-container: kitchen-sink
+      labels:
+        app: kitchen-sink
+        euthanaisa.nais.io/enabled: "true"
+        team: default
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app: kitchen-sink
+              topologyKey: kubernetes.io/hostname
+      containers:
+        - command:
+            - /docker-entrypoint.sh
+            - nginx
+            - -g
+            - daemon off;
+          env:
+            - name: FOO
+              value: bar
+            - name: LOG_LEVEL
+              value: debug
+            - name: NAIS_APP_NAME
+              value: kitchen-sink
+            - name: NAIS_NAMESPACE
+              value: default
+            - name: NAIS_APP_IMAGE
+              value: nginx:1.25
+            - name: NAIS_CLUSTER_NAME
+              value: dev-cluster
+            - name: NAIS_CLIENT_ID
+              value: default:kitchen-sink
+            - name: LOG4J_FORMAT_MSG_NO_LOOKUPS
+              value: "true"
+            - name: PORT
+              value: "8080"
+            - name: BIND_ADDRESS
+              value: 0.0.0.0:8080
+          image: nginx:1.25
+          lifecycle:
+            preStop:
+              httpGet:
+                path: /shutdown
+                port: null
+          livenessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 1
+          name: kitchen-sink
+          ports:
+            - containerPort: 8080
+              name: http
+          readinessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /ready
+              port: 8080
+            initialDelaySeconds: 0
+            periodSeconds: 10
+            timeoutSeconds: 1
+          resources:
+            limits:
+              cpu: "1"
+              memory: 512Mi
+            requests:
+              cpu: 200m
+              memory: 256Mi
+          startupProbe:
+            failureThreshold: 30
+            httpGet:
+              path: /startup
+              port: 8080
+            initialDelaySeconds: 0
+            periodSeconds: 5
+            timeoutSeconds: 1
+          volumeMounts:
+            - mountPath: /etc/app
+              name: app-config
+              readOnly: true
+            - mountPath: /etc/secret
+              name: app-secret
+              readOnly: true
+            - mountPath: /data
+              name: data-pvc
+              readOnly: false
+            - mountPath: /tmp
+              name: emptydir-tmp
+              readOnly: false
+            - mountPath: /tmp
+              name: writable-tmp
+              readOnly: false
+      hostAliases:
+        - hostnames:
+            - db.internal
+          ip: 10.0.0.10
+      imagePullSecrets:
+        - name: regcred
+      securityContext:
+        fsGroup: 1069
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      tolerations:
+        - effect: NoSchedule
+          key: dedicated
+          operator: Equal
+          value: gar
+      volumes:
+        - configMap:
+            name: app-config
+          name: app-config
+        - name: app-secret
+          secret:
+            secretName: app-secret
+        - name: data-pvc
+          persistentVolumeClaim:
+            claimName: data-pvc
+        - emptyDir:
+            medium: Memory
+          name: emptydir-tmp
+        - emptyDir: {}
+          name: writable-tmp
+---
 apiVersion: v1
-kind: List
-items: []
+kind: Service
+metadata:
+  annotations: {}
+  labels:
+    team: default
+  name: kitchen-sink
+  namespace: default
+spec:
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+  selector:
+    app: kitchen-sink
+    team: default
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations: {}
+  labels:
+    team: default
+  name: kitchen-sink
+  namespace: default
+spec:
+  rules:
+    - host: kitchen.local
+      http:
+        paths:
+          - backend:
+              service:
+                name: kitchen-sink
+                port:
+                  number: 80
+            path: /
+            pathType: Prefix
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: kitchen-sink
+  namespace: default
+spec:
+  maxReplicas: 5
+  metrics:
+    - resource:
+        name: cpu
+        target:
+          averageUtilization: 75
+          type: Utilization
+      type: Resource
+  minReplicas: 2
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: kitchen-sink
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  annotations: {}
+  labels:
+    team: default
+  name: kitchen-sink
+  namespace: default
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: kitchen-sink
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  annotations:
+    iam.gke.io/gcp-service-account: svc@project.iam.gserviceaccount.com
+  labels:
+    team: default
+  name: null
+  namespace: default
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  annotations: {}
+  labels:
+    team: default
+  name: kitchen-sink
+  namespace: default
+spec:
+  egress:
+    - to:
+        - namespaceSelector: {}
+  ingress:
+    - from:
+        - namespaceSelector: {}
+  podSelector:
+    matchLabels:
+      app: ""
+  policyTypes:
+    - Ingress
+    - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  annotations: {}
+  labels:
+    team: default
+  name: kitchen-sink-access
+  namespace: default
+spec:
+  egress:
+    - ports:
+        - port: 443
+      to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+        - ipBlock:
+            cidr: 10.0.0.0/8
+    - ports:
+        - port: 53
+          protocol: UDP
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: default
+      ports:
+        - port: 80
+        - port: 8080
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - port: 80
+        - port: 8080
+    - from:
+        - podSelector:
+            matchLabels:
+              app: frontend
+      ports:
+        - port: 80
+        - port: 8080
+  podSelector:
+    matchLabels:
+      app: kitchen-sink-access
+  policyTypes:
+    - Ingress
+    - Egress
+---
+apiVersion: networking.gke.io/v1alpha3
+kind: FQDNNetworkPolicy
+metadata:
+  annotations: {}
+  labels:
+    team: default
+  name: kitchen-sink-fqdn
+  namespace: default
+spec:
+  egress:
+    - ports:
+        - port: 443
+          protocol: TCP
+      to:
+        - fqdns:
+            - api.github.com
+    - ports:
+        - port: 443
+          protocol: TCP
+      to:
+        - fqdns:
+            - storage.googleapis.com
+  podSelector:
+    matchLabels:
+      app: kitchen-sink
+  policyTypes:
+    - Egress
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  annotations: {}
+  labels:
+    team: default
+  name: kitchen-sink
+  namespace: default
+spec:
+  jobLabel: app.kubernetes.io/name
+  podMetricsEndpoints:
+    - honorLabels: false
+      path: /metrics
+      port: http
+  podTargetLabels:
+    - app
+    - team
+  selector:
+    matchLabels:
+      app: kitchen-sink
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: api-token
+  namespace: default
+stringData:
+  TOKEN: abc123
+type: Opaque
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: app-secret
+  namespace: default
+stringData:
+  PASSWORD: s3cr3t
+type: Opaque
+---
+apiVersion: v1
+data:
+  FEATURE_FLAG: "on"
+  GREETING: hello
+kind: ConfigMap
+metadata:
+  annotations: {}
+  labels:
+    team: default
+  name: app-config
+  namespace: default
+---
+apiVersion: v1
+data:
+  FOO: bar
+kind: ConfigMap
+metadata:
+  annotations: {}
+  labels:
+    team: default
+  name: extra-config
+  namespace: default

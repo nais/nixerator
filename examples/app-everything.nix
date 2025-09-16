@@ -132,5 +132,8 @@
     ttl.duration = "24h";
     defaultEnv.enable = true;
     clusterName = "dev-cluster";
+
+    # Host aliases
+    hostAliases = [ { host = "db.internal"; ip = "10.0.0.10"; } ];
   };
 }

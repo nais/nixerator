@@ -1,5 +1,5 @@
 {
-  description = "Example consumer of nixerator's simple entrypoint";
+  description = "Example consumer of nixerator (buildApp)";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.05";
@@ -15,21 +15,25 @@
         let
           pkgs = import nixpkgs { inherit system; };
         in {
-          manifests = pkgs.writeText "manifest.yaml" (nixerator.lib.simple.yamlFromApp {
-            name = "hello";
-            namespace = "default";
-            image = "nginx:1.25";
-            replicas = 2;
-            env = { FOO = "bar"; };
-            service = { enable = true; port = 80; targetPort = 8080; };
-            ingress = { enable = true; host = "hello.local"; };
-            hpa = { enable = true; minReplicas = 1; maxReplicas = 4; targetCPUUtilizationPercentage = 80; };
-            pdb = { enable = true; minAvailable = 1; };
-            serviceAccount = { enable = true; };
-            configMaps = { app = { data = { LOG_LEVEL = "info"; }; }; };
-            networkPolicy = { enable = true; };
-            prometheus = { enable = true; };
-          });
+          manifests = let
+            eval = nixerator.lib.buildApp {
+              app = {
+                name = "hello";
+                namespace = "default";
+                image = "nginx:1.25";
+                replicas = 2;
+                env = { FOO = "bar"; };
+                service = { enable = true; port = 80; targetPort = 8080; };
+                ingress = { enable = true; host = "hello.local"; };
+                hpa = { enable = true; minReplicas = 1; maxReplicas = 4; targetCPUUtilizationPercentage = 80; };
+                pdb = { enable = true; minAvailable = 1; };
+                serviceAccount = { enable = true; };
+                configMaps = { app = { data = { LOG_LEVEL = "info"; }; }; };
+                networkPolicy = { enable = true; };
+                prometheus = { enable = true; };
+              };
+            };
+          in pkgs.writeText "manifest.yaml" eval.yaml;
         }
       );
     };

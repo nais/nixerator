@@ -37,6 +37,7 @@ rec {
     imagePullSecrets ? [],
     tolerations ? [],
     affinity ? null,
+    hostAliases ? [],
     terminationGracePeriodSeconds ? null,
     strategy ? null,
     labels ? {},
@@ -77,6 +78,7 @@ rec {
           // (lib.optionalAttrs (imagePullSecrets != []) { imagePullSecrets = map (n: { name = n; }) imagePullSecrets; })
           // (lib.optionalAttrs (podSecurityContext != null) { securityContext = podSecurityContext; })
           // (lib.optionalAttrs (tolerations != []) { inherit tolerations; })
+          // (lib.optionalAttrs (hostAliases != []) { inherit hostAliases; })
           // (lib.optionalAttrs (affinity != null) { inherit affinity; })
           // (lib.optionalAttrs (terminationGracePeriodSeconds != null) { inherit terminationGracePeriodSeconds; }));
         };
@@ -477,6 +479,7 @@ rec {
         { name = "GCP_TEAM_PROJECT_ID"; value = denv.googleTeamProjectId; }
       ] else [];
       envFinal = (ensureEnv cfg.env) ++ baseEnv ++ gcpEnv;
+      hostAliasesK8s = map (h: { hostnames = [ h.host ]; ip = h.ip; }) (cfg.hostAliases or []);
 
       deployment = mkDeployment {
         name = name;
@@ -500,19 +503,26 @@ rec {
         podSecurityContext = psecContext;
         tolerations = tolerations;
         affinity = affinity;
+        hostAliases = hostAliasesK8s;
         serviceAccountName = if (saCfg.enable or false) then (saCfg.name or name) else null;
         imagePullSecrets = imagePullSecrets;
         terminationGracePeriodSeconds = cfg.terminationGracePeriodSeconds or null;
         strategy = strategy;
       };
       service = lib.optional serviceCfg.enable (mkService {
-        inherit name namespace labels annotations;
+        name = name;
+        namespace = namespace;
+        labels = labelsWithTeam;
+        annotations = annotations;
         port = serviceCfg.port;
         targetPort = serviceCfg.targetPort;
         type = serviceCfg.type;
       });
       ingress = lib.optional (ingressCfg.enable && ingressCfg.host != null) (mkIngress ({
-        inherit name namespace labels annotations;
+        name = name;
+        namespace = namespace;
+        labels = labelsWithTeam;
+        annotations = annotations;
         host = ingressCfg.host;
         path = ingressCfg.path;
         pathType = ingressCfg.pathType;
@@ -524,23 +534,23 @@ rec {
         maxReplicas = hpaCfg.maxReplicas;
         targetCPUUtilizationPercentage = hpaCfg.targetCPUUtilizationPercentage;
       });
-      pdb = lib.optional (pdbCfg.enable or false) (mkPDB ({ inherit name namespace labels annotations; }
+      pdb = lib.optional (pdbCfg.enable or false) (mkPDB ({ name = name; namespace = namespace; labels = labelsWithTeam; annotations = annotations; }
         // (lib.optionalAttrs (pdbCfg ? minAvailable) { minAvailable = pdbCfg.minAvailable; })
         // (lib.optionalAttrs (pdbCfg ? maxUnavailable) { maxUnavailable = pdbCfg.maxUnavailable; })));
       serviceAccount = lib.optional (saCfg.enable or false) (mkServiceAccount {
         inherit namespace;
         name = saCfg.name or name;
         annotations = saCfg.annotations or {};
-        labels = labels;
+        labels = labelsWithTeam;
       });
       configMaps = lib.mapAttrsToList (n: cm: mkConfigMap {
         name = n;
         inherit namespace;
         data = cm.data or {};
-        labels = labels;
+        labels = labelsWithTeam;
         annotations = annotations;
       }) cmCfg;
-      networkPolicy = lib.optional (npCfg.enable or false) (mkNetworkPolicy ({ inherit name namespace labels annotations; }
+      networkPolicy = lib.optional (npCfg.enable or false) (mkNetworkPolicy ({ name = name; namespace = namespace; labels = labelsWithTeam; annotations = annotations; }
         // (lib.optionalAttrs (npCfg ? policyTypes) { policyTypes = npCfg.policyTypes; })
         // (lib.optionalAttrs (npCfg ? podSelector) { podSelector = npCfg.podSelector; })
         // (lib.optionalAttrs (npCfg ? ingress) { ingress = npCfg.ingress; })
@@ -586,7 +596,9 @@ rec {
         in lib.optional (apCfg.enable or false && (inboundRules != [] || egressRules != []))
           (mkNetworkPolicy {
             name = "${name}-access";
-            inherit namespace labels annotations;
+            namespace = namespace;
+            labels = labelsWithTeam;
+            annotations = annotations;
             policyTypes = policyTypes;
             ingress = inboundRules;
             egress = egressRules;
@@ -614,7 +626,9 @@ rec {
       fqdnPolicy = lib.optional ((fqdnCfg.enable or false) || ((apCfg.enable or false) && fqdnFromAP != [])) (mkFQDNNetworkPolicy {
         name = "${name}-fqdn";
         appName = name;
-        inherit namespace labels annotations;
+        namespace = namespace;
+        labels = labelsWithTeam;
+        annotations = annotations;
         rules = fqdnRulesCombined;
       });
       secrets = lib.mapAttrsToList (n: s: mkSecret ({

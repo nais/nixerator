@@ -30,6 +30,7 @@
             appTTL
             appLabelsDefaults
             appScheduling
+            appHostAliases
           ];
           mkConfigModule = appCfg: { lib, ... }: { config.app = appCfg; };
         in {
@@ -57,6 +58,7 @@
           appTTL = import ./modules/ext/ttl.nix;
           appLabelsDefaults = import ./modules/ext/labels-defaults.nix;
           appScheduling = import ./modules/ext/scheduling.nix;
+          appHostAliases = import ./modules/ext/hostaliases.nix;
         };
       }
       // flake-utils.lib.eachDefaultSystem (system:
@@ -100,6 +102,7 @@
                 self.nixosModules.appTTL
                 self.nixosModules.appLabelsDefaults
                 self.nixosModules.appScheduling
+                self.nixosModules.appHostAliases
                 (import ./examples/app-everything.nix)
               ];
               specialArgs = { inherit lib; };
@@ -124,6 +127,7 @@
               appTTL
               appLabelsDefaults
               appScheduling
+              appHostAliases
             ];
             eval = lib.evalModules { modules = docModules; specialArgs = { inherit lib; }; };
             org = nlib.orgDocsNoTableFromEval eval;
