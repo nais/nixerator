@@ -67,6 +67,24 @@
             };
           in pkgs.writeText "manifest.yaml" eval.yaml;
 
+          # Everything example: exercises most resource builders
+          packages.manifests-everything = let
+            eval = nlib.evalAppModules {
+              modules = [
+                self.nixosModules.app
+                self.nixosModules.appPDB
+                self.nixosModules.appServiceAccount
+                self.nixosModules.appConfigMap
+                self.nixosModules.appNetworkPolicy
+                self.nixosModules.appAccessPolicy
+                self.nixosModules.appFQDNPolicy
+                self.nixosModules.appPrometheus
+                (import ./examples/app-everything.nix)
+              ];
+              specialArgs = { inherit lib; };
+            };
+          in pkgs.writeText "manifest.yaml" eval.yaml;
+
           # Generate docs from module options
           packages.docs = let
             docModules = with self.nixosModules; [

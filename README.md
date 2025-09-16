@@ -15,6 +15,7 @@ Simple consumption (as a library)
 Modules workflow (recommended)
 - Evaluate module to manifests: `nix build .#manifests && cat result`
 - Advanced resources: `nix build .#manifests-advanced && cat result`
+- Everything example: `nix build .#manifests-everything && cat result`
 - Generate module docs (Org): `nix build .#docs && sed -n '1,80p' result`
 
 The module lives at `nixosModules.app` and can be evaluated with `lib.evalModules`. Use `nixerator.lib.buildApp { app = { ... }; }` (or `nixerator.lib.evalAppModules` directly) to get `cfg`, `options`, `resources`, and `yaml`.

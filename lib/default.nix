@@ -71,8 +71,7 @@ rec {
           // (lib.optionalAttrs (imagePullSecrets != []) { imagePullSecrets = map (n: { name = n; }) imagePullSecrets; })
           // (lib.optionalAttrs (terminationGracePeriodSeconds != null) { inherit terminationGracePeriodSeconds; }));
         };
-      }
-      // (lib.optionalAttrs (strategy != null) { inherit strategy; });
+      } // (lib.optionalAttrs (strategy != null) { inherit strategy; }));
     };
 
   mkService = {
@@ -317,7 +316,8 @@ rec {
       npCfg = cfg.networkPolicy or { enable = false; };
       apCfg = cfg.accessPolicy or { enable = false; };
       fqdnCfg = cfg.fqdnPolicy or { enable = false; rules = []; };
-      fqdnFromAP = ((apCfg.outbound or {}).allowedFQDNs or []);
+      outboundForFqdn = apCfg.outbound or {};
+      fqdnFromAP = outboundForFqdn.allowedFQDNs or [];
       fqdnRulesCombined = (fqdnCfg.rules or []) ++ fqdnFromAP;
       promCfg = cfg.prometheus or { enable = false; };
       imagePullSecrets = cfg.imagePullSecrets or [];
@@ -448,29 +448,35 @@ rec {
           nsSel = ns: { namespaceSelector = { matchLabels = { "kubernetes.io/metadata.name" = ns; }; }; };
           # Optional ports block
           mkPorts = ports: if ports == [] then [] else map (p: { port = p; }) ports;
+          inbound = apCfg.inbound or {};
+          inPorts = inbound.ports or [];
+          allowSameNs = inbound.allowSameNamespace or false;
+          allowedNs = inbound.allowedNamespaces or [];
+          allowedApps = inbound.allowedApps or [];
           inboundRules =
             let
-              sameNs = if (apCfg.inbound or {}).allowSameNamespace or false
-                then [ { from = [ nsSel namespace ]; ports = mkPorts ((apCfg.inbound or {}).ports or []); } ] else [];
-              nsRules = lib.concatMap (ns: [ { from = [ nsSel ns ]; ports = mkPorts ((apCfg.inbound or {}).ports or []); } ]) (((apCfg.inbound or {}).allowedNamespaces) or []);
+              sameNs = if allowSameNs then [ { from = [ nsSel namespace ]; ports = mkPorts inPorts; } ] else [];
+              nsRules = lib.concatMap (ns: [ { from = [ nsSel ns ]; ports = mkPorts inPorts; } ]) allowedNs;
               appRules = lib.concatMap (appName: [ {
                 from = [ { podSelector = { matchLabels = { app = appName; }; }; } ];
-                ports = mkPorts ((apCfg.inbound or {}).ports or []);
-              } ]) (((apCfg.inbound or {}).allowedApps) or []);
+                ports = mkPorts inPorts;
+              } ]) allowedApps;
             in sameNs ++ nsRules ++ appRules;
-          egressRules =
+          outbound = apCfg.outbound or {};
+          allowAll = outbound.allowAll or true;
+          obNs = outbound.allowedNamespaces or [];
+          obCidrs = outbound.allowedCIDRs or [];
+          obPorts = outbound.allowedPorts or [];
+          obAllowDNS = outbound.allowDNS or false;
+          egressRules = if allowAll then [] else (
             let
-              allowAll = (apCfg.outbound or {}).allowAll or true;
-            in if allowAll then [] else (
-              let
-                nsPeers = map (ns: nsSel ns) (((apCfg.outbound or {}).allowedNamespaces) or []);
-                cidrPeers = map (cidr: { ipBlock = { inherit cidr; }; }) (((apCfg.outbound or {}).allowedCIDRs) or []);
-                ports = mkPorts (((apCfg.outbound or {}).allowedPorts) or []);
-                dnsRule = if ((apCfg.outbound or {}).allowDNS or false)
-                  then [ { ports = [ { protocol = "UDP"; port = 53; } ]; } ] else [];
-                baseRule = if (nsPeers ++ cidrPeers) == [] && ports == [] then [] else [ ({ to = nsPeers ++ cidrPeers; } // (lib.optionalAttrs (ports != []) { inherit ports; })) ];
-              in baseRule ++ dnsRule
-            );
+              nsPeers = map (ns: nsSel ns) obNs;
+              cidrPeers = map (cidr: { ipBlock = { inherit cidr; }; }) obCidrs;
+              ports = mkPorts obPorts;
+              dnsRule = if obAllowDNS then [ { ports = [ { protocol = "UDP"; port = 53; } ]; } ] else [];
+              baseRule = if (nsPeers ++ cidrPeers) == [] && ports == [] then [] else [ ({ to = nsPeers ++ cidrPeers; } // (lib.optionalAttrs (ports != []) { inherit ports; })) ];
+            in baseRule ++ dnsRule
+          );
           policyTypes = []
             ++ (if inboundRules != [] then [ "Ingress" ] else [])
             ++ (if egressRules != [] then [ "Egress" ] else []);
