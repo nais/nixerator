@@ -72,6 +72,13 @@ in
       description = "Additional annotations applied to all resources.";
     };
 
+    # Optional clusterName used by defaultEnv injection
+    clusterName = lib.mkOption {
+      type = types.str;
+      default = "";
+      description = "Cluster name for NAIS_* env vars when defaultEnv.enable = true.";
+    };
+
     imagePullSecrets = lib.mkOption {
       type = types.listOf types.str;
       default = [];

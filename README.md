@@ -42,6 +42,13 @@ Recently added toward Naiserator parity
 - Lifecycle preStop hooks: `preStop.exec.command = ["..."]` or `preStop.http.{path,port}`.
 - Deployment strategy: `strategy.type = "Recreate"|"RollingUpdate"` with `strategy.rollingUpdate.{maxSurge,maxUnavailable}`.
   - Example: `nix build .#manifests-advanced && cat result` (see `examples/app-advanced.nix`).
+- Pod security defaults: `podSecurity.enable = true` (FSGroup 1069, RuntimeDefault seccomp, /tmp EmptyDir mount).
+- Default env: `defaultEnv.enable = true` injects NAIS_* and PORT/BIND_ADDRESS (+GCP when configured).
+- Observability annotations: `observability.defaultContainer`, `observability.logformat`, `observability.logtransform`.
+- Reloader + TTL: `reloader.enable = true`, `ttl.enable = true` (+ `ttl.duration` or `ttl.killAfter`).
+- Team label default: `labelsDefaults.addTeam = true` adds `team = namespace` on resources.
+- Scheduling hooks: `scheduling.antiAffinity` (required|preferred, topologyKey), `scheduling.tolerations` list.
+- Prometheus: `prometheus.enable = true; prometheus.kind = "PodMonitor"|"ServiceMonitor"; prometheus.endpoints = [ { port = "http"; path = "/metrics"; } ];`.
 
 Docs generation
 - `lib.orgDocsFromOptions` and `lib.orgDocsFromEval` turn the evaluated options tree into an Emacs Org file listing option names, types, defaults, and descriptions.

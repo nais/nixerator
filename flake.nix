@@ -23,6 +23,13 @@
             appAccessPolicy
             appFQDNPolicy
             appPrometheus
+            appPodSecurity
+            appObservability
+            appDefaultEnv
+            appReloader
+            appTTL
+            appLabelsDefaults
+            appScheduling
           ];
           mkConfigModule = appCfg: { lib, ... }: { config.app = appCfg; };
         in {
@@ -43,6 +50,13 @@
           appAccessPolicy = import ./modules/ext/accesspolicy.nix;
           appFQDNPolicy = import ./modules/ext/fqdnpolicy.nix;
           appPrometheus = import ./modules/ext/prometheus.nix;
+          appPodSecurity = import ./modules/ext/podsecurity.nix;
+          appObservability = import ./modules/ext/observability.nix;
+          appDefaultEnv = import ./modules/ext/defaultenv.nix;
+          appReloader = import ./modules/ext/reloader.nix;
+          appTTL = import ./modules/ext/ttl.nix;
+          appLabelsDefaults = import ./modules/ext/labels-defaults.nix;
+          appScheduling = import ./modules/ext/scheduling.nix;
         };
       }
       // flake-utils.lib.eachDefaultSystem (system:
@@ -79,6 +93,13 @@
                 self.nixosModules.appAccessPolicy
                 self.nixosModules.appFQDNPolicy
                 self.nixosModules.appPrometheus
+                self.nixosModules.appPodSecurity
+                self.nixosModules.appObservability
+                self.nixosModules.appDefaultEnv
+                self.nixosModules.appReloader
+                self.nixosModules.appTTL
+                self.nixosModules.appLabelsDefaults
+                self.nixosModules.appScheduling
                 (import ./examples/app-everything.nix)
               ];
               specialArgs = { inherit lib; };
@@ -96,6 +117,13 @@
               appAccessPolicy
               appFQDNPolicy
               appPrometheus
+              appPodSecurity
+              appObservability
+              appDefaultEnv
+              appReloader
+              appTTL
+              appLabelsDefaults
+              appScheduling
             ];
             eval = lib.evalModules { modules = docModules; specialArgs = { inherit lib; }; };
             org = nlib.orgDocsNoTableFromEval eval;

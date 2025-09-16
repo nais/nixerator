@@ -31,8 +31,12 @@ rec {
     readinessProbe ? null,
     startupProbe ? null,
     lifecycle ? null,
+    podAnnotations ? {},
+    podSecurityContext ? null,
     serviceAccountName ? null,
     imagePullSecrets ? [],
+    tolerations ? [],
+    affinity ? null,
     terminationGracePeriodSeconds ? null,
     strategy ? null,
     labels ? {},
@@ -50,7 +54,9 @@ rec {
         replicas = replicas;
         selector.matchLabels = { app = name; } // labels;
         template = {
-          metadata.labels = { app = name; } // labels;
+          metadata = {
+            labels = { app = name; } // labels;
+          } // (lib.optionalAttrs (podAnnotations != {}) { annotations = podAnnotations; });
           spec = ({
             containers = [
               ({ inherit name image; ports = ports; }
@@ -69,6 +75,9 @@ rec {
           // (lib.optionalAttrs (volumes != []) { inherit volumes; })
           // (lib.optionalAttrs (serviceAccountName != null) { inherit serviceAccountName; })
           // (lib.optionalAttrs (imagePullSecrets != []) { imagePullSecrets = map (n: { name = n; }) imagePullSecrets; })
+          // (lib.optionalAttrs (podSecurityContext != null) { securityContext = podSecurityContext; })
+          // (lib.optionalAttrs (tolerations != []) { inherit tolerations; })
+          // (lib.optionalAttrs (affinity != null) { inherit affinity; })
           // (lib.optionalAttrs (terminationGracePeriodSeconds != null) { inherit terminationGracePeriodSeconds; }));
         };
       } // (lib.optionalAttrs (strategy != null) { inherit strategy; }));
@@ -270,6 +279,26 @@ rec {
       };
     };
 
+  mkPodMonitor = {
+    name,
+    namespace ? "default",
+    path ? "/metrics",
+    port ? "http",
+    labels ? {},
+    annotations ? {}
+  }:
+    {
+      apiVersion = "monitoring.coreos.com/v1";
+      kind = "PodMonitor";
+      metadata = { inherit name namespace labels annotations; };
+      spec = {
+        jobLabel = "app.kubernetes.io/name";
+        podTargetLabels = [ "app" "team" ];
+        selector.matchLabels = { app = name; };
+        podMetricsEndpoints = [ ({ inherit port path; honorLabels = false; }) ];
+      };
+    };
+
   # GKE FQDNNetworkPolicy (optional CRD)
   mkFQDNNetworkPolicy = {
     name,
@@ -304,6 +333,8 @@ rec {
       name = cfg.name;
       namespace = cfg.namespace;
       labels = cfg.labels or {};
+      labelsDefaults = (cfg.labelsDefaults or {});
+      labelsWithTeam = if (labelsDefaults.addTeam or false) then (labels // { team = namespace; }) else labels;
       annotations = cfg.annotations or {};
       resourcesCfg = cfg.resources or { limits = {}; requests = {}; };
       serviceCfg = cfg.service;
@@ -320,7 +351,22 @@ rec {
       fqdnFromAP = outboundForFqdn.allowedFQDNs or [];
       fqdnRulesCombined = (fqdnCfg.rules or []) ++ fqdnFromAP;
       promCfg = cfg.prometheus or { enable = false; };
+      schedCfg = cfg.scheduling or {};
       imagePullSecrets = cfg.imagePullSecrets or [];
+      # Scheduling: tolerations and anti-affinity
+      tolerations = schedCfg.tolerations or [];
+      affinity = let aa = schedCfg.antiAffinity or { enable = false; }; in
+        if (aa.enable or false) then (
+          if (aa.type or "required") == "required" then {
+            podAntiAffinity.requiredDuringSchedulingIgnoredDuringExecution = [
+              { labelSelector.matchLabels = { app = name; }; topologyKey = (aa.topologyKey or "kubernetes.io/hostname"); }
+            ];
+          } else {
+            podAntiAffinity.preferredDuringSchedulingIgnoredDuringExecution = [
+              { weight = 100; podAffinityTerm = { labelSelector.matchLabels = { app = name; }; topologyKey = (aa.topologyKey or "kubernetes.io/hostname"); }; }
+            ];
+          }
+        ) else null;
       # Convert probes to Kubernetes shape if enabled (non-empty path)
       mkProbe = probeCfg: let
         path = probeCfg.path or "";
@@ -381,21 +427,79 @@ rec {
               // (lib.optionalAttrs ((st.rollingUpdate.maxSurge or null) != null) { maxSurge = st.rollingUpdate.maxSurge; })
               // (lib.optionalAttrs ((st.rollingUpdate.maxUnavailable or null) != null) { maxUnavailable = st.rollingUpdate.maxUnavailable; });
           }));
+      # Deployment metadata annotations augments (reloader, ttl)
+      reloaderAnn = if ((cfg.reloader or { enable = false; }).enable or false) then { "reloader.stakater.com/search" = "true"; } else {};
+      ttlCfg = cfg.ttl or { enable = false; };
+      ttlAnn = if (ttlCfg.enable or false) then (
+        if (ttlCfg.killAfter or null) != null then { "euthanaisa.nais.io/kill-after" = ttlCfg.killAfter; }
+        else if (ttlCfg.duration or null) != null then { "euthanaisa.nais.io/ttl" = ttlCfg.duration; }
+        else {}
+      ) else {};
+      ttlLabel = if (ttlCfg.enable or false) then { "euthanaisa.nais.io/enabled" = "true"; } else {};
+
+      # Pod annotations (observability)
+      obs = cfg.observability or {};
+      podAnn = {}
+        // (lib.optionalAttrs (obs.defaultContainer or false) { "kubectl.kubernetes.io/default-container" = name; })
+        // (lib.optionalAttrs ((obs.logformat or "") != "") { "nais.io/logformat" = obs.logformat; })
+        // (lib.optionalAttrs ((obs.logtransform or "") != "") { "nais.io/logtransform" = obs.logtransform; });
+
+      # Pod security context and /tmp writable emptyDir
+      psec = cfg.podSecurity or { enable = false; };
+      psecEnabled = psec.enable or false;
+      psecContext = if psecEnabled then {
+        fsGroup = 1069;
+        fsGroupChangePolicy = "OnRootMismatch";
+        seccompProfile = { type = "RuntimeDefault"; };
+      } else null;
+      tmpVolName = if psecEnabled then (psec.tmpVolumeName or "writable-tmp") else null;
+      tmpVol = if psecEnabled then [ { name = tmpVolName; emptyDir = {}; } ] else [];
+      tmpMount = if psecEnabled then [ { name = tmpVolName; mountPath = "/tmp"; readOnly = false; } ] else [];
+
+      # Default env injection
+      denv = cfg.defaultEnv or { enable = false; };
+      denvEnabled = denv.enable or false;
+      portStr = toString serviceCfg.targetPort;
+      clusterName = cfg.clusterName or "";
+      clientId = if (denv.clientIdOverride or null) != null then denv.clientIdOverride else "${namespace}:${name}";
+      baseEnv = if denvEnabled then [
+        { name = "NAIS_APP_NAME"; value = name; }
+        { name = "NAIS_NAMESPACE"; value = namespace; }
+        { name = "NAIS_APP_IMAGE"; value = cfg.image; }
+        { name = "NAIS_CLUSTER_NAME"; value = clusterName; }
+        { name = "NAIS_CLIENT_ID"; value = clientId; }
+        { name = "LOG4J_FORMAT_MSG_NO_LOOKUPS"; value = "true"; }
+        { name = "PORT"; value = portStr; }
+        { name = "BIND_ADDRESS"; value = "0.0.0.0:" + portStr; }
+      ] else [];
+      gcpEnv = if denvEnabled && ((denv.googleTeamProjectId or null) != null) then [
+        { name = "GOOGLE_CLOUD_PROJECT"; value = denv.googleTeamProjectId; }
+        { name = "GCP_TEAM_PROJECT_ID"; value = denv.googleTeamProjectId; }
+      ] else [];
+      envFinal = (ensureEnv cfg.env) ++ baseEnv ++ gcpEnv;
+
       deployment = mkDeployment {
-        inherit name namespace labels annotations;
+        name = name;
+        namespace = namespace;
+        labels = labelsWithTeam // ttlLabel;
+        annotations = annotations // reloaderAnn // ttlAnn;
         image = cfg.image;
         replicas = cfg.replicas;
-        env = cfg.env;
+        env = envFinal;
         command = cfg.command or [];
         ports = [{ name = "http"; containerPort = serviceCfg.targetPort; }];
         envFrom = lib.filter (x: x != {}) envFrom;
         resources = (if (resourcesCfg.limits or {}) == {} && (resourcesCfg.requests or {}) == {} then null else resourcesCfg);
-        volumeMounts = filesMounts;
-        volumes = filesVolumes;
+        volumeMounts = filesMounts ++ tmpMount;
+        volumes = filesVolumes ++ tmpVol;
         livenessProbe = livenessProbe;
         readinessProbe = readinessProbe;
         startupProbe = startupProbe;
         lifecycle = lifecycle;
+        podAnnotations = podAnn;
+        podSecurityContext = psecContext;
+        tolerations = tolerations;
+        affinity = affinity;
         serviceAccountName = if (saCfg.enable or false) then (saCfg.name or name) else null;
         imagePullSecrets = imagePullSecrets;
         terminationGracePeriodSeconds = cfg.terminationGracePeriodSeconds or null;
@@ -444,8 +548,6 @@ rec {
       # accessPolicy -> a generated NetworkPolicy named "${name}-access"
       accessNetworkPolicy =
         let
-          # Utility: build a namespaceSelector for a given ns name
-          nsSel = ns: { namespaceSelector = { matchLabels = { "kubernetes.io/metadata.name" = ns; }; }; };
           # Optional ports block
           mkPorts = ports: if ports == [] then [] else map (p: { port = p; }) ports;
           inbound = apCfg.inbound or {};
@@ -455,8 +557,9 @@ rec {
           allowedApps = inbound.allowedApps or [];
           inboundRules =
             let
-              sameNs = if allowSameNs then [ { from = [ nsSel namespace ]; ports = mkPorts inPorts; } ] else [];
-              nsRules = lib.concatMap (ns: [ { from = [ nsSel ns ]; ports = mkPorts inPorts; } ]) allowedNs;
+              sameNsPeer = { namespaceSelector = { matchLabels = { "kubernetes.io/metadata.name" = namespace; }; }; };
+              sameNs = if allowSameNs then [ { from = [ sameNsPeer ]; ports = mkPorts inPorts; } ] else [];
+              nsRules = lib.concatMap (ns: [ { from = [ { namespaceSelector = { matchLabels = { "kubernetes.io/metadata.name" = ns; }; }; } ]; ports = mkPorts inPorts; } ]) allowedNs;
               appRules = lib.concatMap (appName: [ {
                 from = [ { podSelector = { matchLabels = { app = appName; }; }; } ];
                 ports = mkPorts inPorts;
@@ -470,7 +573,7 @@ rec {
           obAllowDNS = outbound.allowDNS or false;
           egressRules = if allowAll then [] else (
             let
-              nsPeers = map (ns: nsSel ns) obNs;
+              nsPeers = map (ns: { namespaceSelector = { matchLabels = { "kubernetes.io/metadata.name" = ns; }; }; }) obNs;
               cidrPeers = map (cidr: { ipBlock = { inherit cidr; }; }) obCidrs;
               ports = mkPorts obPorts;
               dnsRule = if obAllowDNS then [ { ports = [ { protocol = "UDP"; port = 53; } ]; } ] else [];
@@ -488,9 +591,26 @@ rec {
             ingress = inboundRules;
             egress = egressRules;
           });
-      serviceMonitor = lib.optional (promCfg.enable or false) (mkServiceMonitor ({ inherit name namespace labels annotations; }
-        // (lib.optionalAttrs (promCfg ? endpoints) { endpoints = promCfg.endpoints; })
-        // (lib.optionalAttrs (promCfg ? selector) { selector = promCfg.selector; })));
+      # Prometheus scraping resource
+      serviceMonitor = lib.optional (promCfg.enable or false) (
+        let ep = (if (promCfg.endpoints or []) != [] then lib.head promCfg.endpoints else { port = "http"; path = "/metrics"; }); in
+        if (promCfg.kind or "PodMonitor") == "PodMonitor" then
+          mkPodMonitor {
+            inherit name namespace;
+            labels = labelsWithTeam;
+            path = ep.path or "/metrics";
+            port = ep.port or "http";
+            annotations = annotations;
+          }
+        else
+          mkServiceMonitor ({
+            inherit name namespace;
+            labels = labelsWithTeam;
+            annotations = annotations;
+            endpoints = [ { port = ep.port or "http"; path = ep.path or "/metrics"; } ];
+            selector = { matchLabels = { app = name; }; };
+          })
+      );
       fqdnPolicy = lib.optional ((fqdnCfg.enable or false) || ((apCfg.enable or false) && fqdnFromAP != [])) (mkFQDNNetworkPolicy {
         name = "${name}-fqdn";
         appName = name;

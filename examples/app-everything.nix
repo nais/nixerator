@@ -60,6 +60,12 @@
       };
     };
 
+    scheduling = {
+      antiAffinity.enable = true;
+      antiAffinity.type = "required";
+      tolerations = [ { key = "dedicated"; operator = "Equal"; value = "gar"; effect = "NoSchedule"; } ];
+    };
+
     serviceAccount.enable = true;
     serviceAccount.name = null; # defaults to app name
     serviceAccount.annotations = {
@@ -113,8 +119,18 @@
 
     prometheus = {
       enable = true;
+      kind = "PodMonitor";
       endpoints = [ { port = "http"; path = "/metrics"; } ];
     };
+
+    # Defaults
+    labelsDefaults.addTeam = true;
+    podSecurity.enable = true;
+    observability.defaultContainer = true;
+    reloader.enable = true;
+    ttl.enable = true;
+    ttl.duration = "24h";
+    defaultEnv.enable = true;
+    clusterName = "dev-cluster";
   };
 }
-

@@ -1,0 +1,4 @@
+# Placeholder golden for the kitchen-sink example; run UPDATE_GOLDEN=1 tests/run.sh to refresh.
+apiVersion: v1
+kind: List
+items: []
