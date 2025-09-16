@@ -58,4 +58,3 @@ spec:
     ExposedScopes:
       - api/.default
   SecretName: maskinporten-maskin
-

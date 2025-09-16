@@ -308,6 +308,21 @@ rec {
       };
     };
 
+  # NAIS: IDPortenClient
+  mkIDPortenClient = {
+    name,
+    namespace ? "default",
+    secretName ? "idporten-sso",
+    labels ? {},
+    annotations ? {}
+  }:
+    {
+      apiVersion = "nais.io/v1";
+      kind = "IDPortenClient";
+      metadata = { inherit name namespace labels annotations; };
+      spec = { SecretName = secretName; };
+    };
+
   # NAIS: Jwker (TokenX client)
   mkJwker = {
     name,
@@ -678,6 +693,7 @@ rec {
       ints = cfg.integrations or {};
       vaultCfg = cfg.vault or { enable = false; };
       azureCfg = cfg.azure or { application = { enabled = false; }; sidecar = { enabled = false; }; };
+      idpCfg = cfg.idporten or { enable = false; sidecar = { enabled = false; autoLogin = false; autoLoginIgnorePaths = []; level = null; locale = null; }; };
       tokenxCfg = cfg.tokenx or { enable = false; };
       maskinCfg = cfg.maskinporten or { enable = false; scopes = { consumed = []; exposed = []; }; };
       texasCfg = cfg.texas or { enable = false; };
@@ -943,11 +959,12 @@ rec {
       # Optional aiven label when any aiven integration is configured
       anyAiven = aivenEnabled && ((aivenKafka != null) || (aivenOpenSearch != null) || (aivenValkey != []));
       labelsWithAiven = labelsWithTeam // (lib.optionalAttrs anyAiven { aiven = "enabled"; });
-      # Auth labels when Azure/Wonderwall/Texas enabled
+      # Auth labels when Azure/IDPorten/Wonderwall/Texas enabled
       labelsWithAuth = labelsWithAiven
         // (lib.optionalAttrs ((azureCfg.application.enabled or false) || (azureCfg.sidecar.enabled or false)) { azure = "enabled"; })
         // (lib.optionalAttrs (azureCfg.sidecar.enabled or false) { wonderwall = "enabled"; })
         // (lib.optionalAttrs (azureCfg.sidecar.enabled or false) { otel = "enabled"; })
+        // (lib.optionalAttrs (idpCfg.sidecar.enabled or false) { idporten = "enabled"; wonderwall = "enabled"; otel = "enabled"; })
         // (lib.optionalAttrs (texasCfg.enable or false) { texas = "enabled"; otel = "enabled"; });
 
       # Secure logs: labels, volumes, initContainer, mounts
@@ -1049,6 +1066,51 @@ rec {
           }
         ] else [];
 
+      # Wonderwall for IDPorten
+      wwIdpInit = let sc = idpCfg.sidecar or { enabled = false; }; in
+        if (sc.enabled or false) then [
+          {
+            name = "wonderwall";
+            image = "ghcr.io/nais/wonderwall:latest";
+            imagePullPolicy = "IfNotPresent";
+            env = (
+              let
+                ing = ingressCfg;
+                scheme = "https://";
+                ingressUrl = if (ing.enable or false) && (ing.host or null) != null then "${scheme}${ing.host}" else "";
+                portStr = toString serviceCfg.targetPort;
+                autoIgnored = lib.concatStringsSep "," (sc.autoLoginIgnorePaths or []);
+              in [
+                { name = "WONDERWALL_OPENID_PROVIDER"; value = "idporten"; }
+                { name = "WONDERWALL_INGRESS"; value = ingressUrl; }
+                { name = "WONDERWALL_UPSTREAM_IP"; valueFrom.fieldRef.fieldPath = "status.podIP"; }
+                { name = "WONDERWALL_UPSTREAM_PORT"; value = portStr; }
+                { name = "WONDERWALL_BIND_ADDRESS"; value = "0.0.0.0:7564"; }
+                { name = "WONDERWALL_METRICS_BIND_ADDRESS"; value = "0.0.0.0:7565"; }
+                { name = "WONDERWALL_PROBE_BIND_ADDRESS"; value = "0.0.0.0:7566"; }
+              ]
+              ++ (lib.optional (sc.autoLogin or false) { name = "WONDERWALL_AUTO_LOGIN"; value = "true"; })
+              ++ (lib.optional (sc.autoLogin or false && autoIgnored != "") { name = "WONDERWALL_AUTO_LOGIN_IGNORE_PATHS"; value = autoIgnored; })
+            );
+            envFrom = [
+              { secretRef = { name = "idporten-sso"; }; }
+              { secretRef = { name = "wonderwall-idporten-config"; }; }
+            ];
+            ports = [
+              { containerPort = 7564; protocol = "TCP"; name = "wonderwall"; }
+              { containerPort = 7565; protocol = "TCP"; name = "ww-metrics"; }
+              { containerPort = 7566; protocol = "TCP"; name = "ww-probe"; }
+            ];
+            securityContext = {
+              allowPrivilegeEscalation = false;
+              readOnlyRootFilesystem = true;
+              runAsNonRoot = true;
+              capabilities.drop = [ "ALL" ];
+              seccompProfile.type = "RuntimeDefault";
+            };
+          }
+        ] else [];
+
       deployment = mkDeployment {
         name = name;
         namespace = namespace;
@@ -1071,7 +1133,8 @@ rec {
         in base ++ extra;
         envFrom = lib.filter (x: x != {}) (envFrom
           ++ (lib.optional (tokenxCfg.enable or false) { secretRef = { name = "tokenx-" + name; }; })
-          ++ (lib.optional (maskinCfg.enable or false) { secretRef = { name = "maskinporten-" + name; }; }));
+          ++ (lib.optional (maskinCfg.enable or false) { secretRef = { name = "maskinporten-" + name; }; })
+          ++ (lib.optional (idpCfg.enable or false || (idpCfg.sidecar.enabled or false)) { secretRef = { name = "idporten-sso"; }; }));
         resources = (if (resourcesCfg.limits or {}) == {} && (resourcesCfg.requests or {}) == {} then null else resourcesCfg);
         volumeMounts = let ks = aivenKafka; in (filesMounts ++ tmpMount ++ secureLogsMounts)
           ++ (if ks != null && (ks.secretName or null) != null && (ks.mountCredentials or true)
@@ -1087,7 +1150,7 @@ rec {
               { key = "client.truststore.jks"; path = "client.truststore.jks"; }
             ]; }; } ] else [])
           ++ (let gen = feCfg.generatedConfig or null; in lib.optional (gen != null && (feCfg.telemetryUrl or null) != null) { name = "frontend-config"; configMap = { name = "${name}-frontend-config"; }; });
-        initContainers = secureLogsInitContainers ++ wwInit
+        initContainers = secureLogsInitContainers ++ wwInit ++ wwIdpInit
           ++ (if (texasCfg.enable or false) && ((azureCfg.application.enabled or false) || (maskinCfg.enable or false) || (tokenxCfg.enable or false)) then [
             {
               name = "texas";
@@ -1489,6 +1552,14 @@ export default {
             allowAllUsers = app.allowAllUsers or false;
           }
         );
+      idportenClient = lib.optional (idpCfg.enable or false || (idpCfg.sidecar.enabled or false)) (
+        mkIDPortenClient {
+          inherit name namespace;
+          labels = labelsWithAuth;
+          annotations = annotations;
+          secretName = "idporten-sso";
+        }
+      );
       # GCP BigQuery datasets (NAIS CRD) + Project IAM jobUser binding
       bqDatasets = lib.concatMap (d:
         let
@@ -1560,6 +1631,7 @@ export default {
         ++ gcpBuckets
         ++ gcpCloudSql
         ++ azureApplication
+        ++ idportenClient
         ++ (lib.optional (tokenxCfg.enable or false) (mkJwker { inherit name namespace; labels = labelsWithAuth; annotations = annotations; accessPolicy = {}; secretName = "tokenx-" + name; }))
         ++ (lib.optional (maskinCfg.enable or false) (mkMaskinportenClient { inherit name namespace; labels = labelsWithAuth; annotations = annotations; scopes = { consumed = (maskinCfg.scopes.consumed or []); exposed = (maskinCfg.scopes.exposed or []); }; secretName = "maskinporten-" + name; }))
         ++ frontendConfig;

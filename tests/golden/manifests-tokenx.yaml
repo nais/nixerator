@@ -53,4 +53,3 @@ metadata:
 spec:
   AccessPolicy: {}
   SecretName: tokenx-tokenx
-

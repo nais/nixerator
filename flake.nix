@@ -209,6 +209,14 @@
             };
           in pkgs.writeText "manifest.yaml" eval.yaml;
 
+          # IDPorten sidecar example
+          packages.manifests-idporten = let
+            eval = nlib.evalAppModules {
+              modules = [ self.nixosModules.app self.nixosModules.appIDPorten (import ./examples/app-idporten.nix) ];
+              specialArgs = { inherit lib; };
+            };
+          in pkgs.writeText "manifest.yaml" eval.yaml;
+
           # AccessPolicy variants
           packages.manifests-access-samens = let
             eval = nlib.evalAppModules {
