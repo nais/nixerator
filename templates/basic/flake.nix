@@ -15,7 +15,6 @@
         let
           pkgs = import nixpkgs { inherit system; };
         in {
-          # Single function call builds YAML from a simple app config
           manifests = pkgs.writeText "manifest.yaml" (nixerator.lib.simple.yamlFromApp {
             name = "hello";
             namespace = "default";
@@ -35,4 +34,3 @@
       );
     };
 }
-
