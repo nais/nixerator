@@ -18,8 +18,8 @@ YQ=${YQ:-yq}
 mkdir -p "$GOLDEN_DIR"
 
 canonicalize() {
-  # Pretty-print and sort keys to reduce noise
-  "$YQ" -P -S '.'
+  # Pretty-print and sort keys recursively to reduce noise
+  "$YQ" -P 'sort_keys(..)'
 }
 
 compare_or_update() {

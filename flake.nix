@@ -96,8 +96,14 @@
           # Generate Emacs Org docs for the module options
           packages.docs-org = let
             eval = lib.evalModules { modules = [ self.nixosModules.app ]; specialArgs = { inherit lib; }; };
-            org = nlib.orgDocsFromEval eval;
+            org = nlib.orgDocsFancyFromEval eval;
           in pkgs.writeText "nixerator-options.org" org;
+
+          # Also expose the simpler docs if desired
+          packages.docs-org-simple = let
+            eval = lib.evalModules { modules = [ self.nixosModules.app ]; specialArgs = { inherit lib; }; };
+            org = nlib.orgDocsFromEval eval;
+          in pkgs.writeText "nixerator-options-simple.org" org;
 
           devShells.default = pkgs.mkShell {
             buildInputs = [
@@ -116,8 +122,8 @@
             golden = ./tests/golden/manifests-basic.yaml;
           } ''
             set -euo pipefail
-            yq -P -S < "$src" > built.yaml
-            yq -P -S < "$golden" > golden.yaml || true
+            yq -P 'sort_keys(..)' < "$src" > built.yaml
+            yq -P 'sort_keys(..)' < "$golden" > golden.yaml || true
             diff -u golden.yaml built.yaml || { echo "Golden mismatch"; exit 1; }
             cp built.yaml "$out"
           '';

@@ -81,11 +81,74 @@ spec:
     kind: Deployment
     name: hello
 ---
-apiVersion: v1
-kind: Secret
+apiVersion: policy/v1
+kind: PodDisruptionBudget
 metadata:
-  name: example-secret
+  annotations: {}
+  labels: {}
+  name: hello
   namespace: default
-stringData:
-  PASSWORD: s3cr3t
-type: Opaque
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: hello
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  annotations: {}
+  labels: {}
+  name: null
+  namespace: default
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  annotations: {}
+  labels: {}
+  name: hello
+  namespace: default
+spec:
+  egress:
+    - ports:
+        - port: 53
+          protocol: UDP
+      to:
+        - namespaceSelector: {}
+  ingress:
+    - from:
+        - namespaceSelector: {}
+  podSelector:
+    matchLabels:
+      app: ""
+  policyTypes:
+    - Ingress
+    - Egress
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  annotations: {}
+  labels: {}
+  name: hello
+  namespace: default
+spec:
+  endpoints:
+    - interval: null
+      path: /metrics
+      port: http
+  namespaceSelector: {}
+  selector:
+    matchLabels: {}
+---
+apiVersion: v1
+data:
+  FEATURE_X: "true"
+  LOG_LEVEL: info
+kind: ConfigMap
+metadata:
+  annotations: {}
+  labels: {}
+  name: app-config
+  namespace: default

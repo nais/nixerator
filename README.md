@@ -15,6 +15,7 @@ Modules workflow (recommended)
 - Evaluate module to manifests: `nix build .#manifests-module-basic && cat result`
 - Extended resources: `nix build .#manifests-module-extended && cat result`
 - Generate module docs (Org): `nix build .#docs-org && sed -n '1,80p' result`
+ - Simple docs variant: `nix build .#docs-org-simple && sed -n '1,60p' result`
 
 The module lives at `nixosModules.app` and can be evaluated with `lib.evalModules`. Use `lib.evalAppModules { modules = [ self.nixosModules.app yourModule ]; }` to get `cfg`, `options`, `resources`, and `yaml`.
 

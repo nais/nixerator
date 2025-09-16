@@ -386,6 +386,80 @@ rec {
   # Convenience: generate docs from full eval (takes eval.options.app)
   orgDocsFromEval = eval: orgDocsFromOptions eval.options.app;
 
+  # Fancy Org docs with TOC, grouped tables, and usage snippet
+  orgDocsFancyFromOptions = opts:
+    let
+      show = v:
+        if v == null then "null"
+        else if lib.isString v then v
+        else builtins.toJSON v;
+      esc = s: lib.replaceStrings ["\n" "|"] [" " "\\|"] (toString s);
+      flatten = prefix: as:
+        lib.concatLists (lib.mapAttrsToList (n: v:
+          let path = if prefix == "" then n else "${prefix}.${n}"; in
+          if (lib.isAttrs v && (v ? _type && v._type == "option")) then [ { inherit path; opt = v; } ]
+          else if lib.isAttrs v then flatten path v
+          else []
+        ) as);
+      items = flatten "" opts;
+      groupKey = item:
+        let parts = lib.splitString "." item.path;
+        in if builtins.length parts <= 1 then "core" else builtins.head parts;
+      groups = lib.groupBy groupKey items;
+      cap = s: let len = lib.stringLength s; in
+        (lib.toUpper (lib.substring 0 1 s)) + (if len > 1 then lib.substring 1 (len - 1) s else "");
+      relPath = item:
+        let parts = lib.splitString "." item.path; in
+        if builtins.length parts <= 1 then item.path else lib.concatStringsSep "." (lib.tail parts);
+      tname = opt: if opt ? type && opt.type ? name then opt.type.name else "";
+      defv = opt:
+        if opt ? default then show opt.default
+        else if opt ? defaultText then opt.defaultText
+        else "-";
+      exv = opt: if opt ? example then show opt.example else "";
+      row = item: "| " + esc (relPath item)
+        + " | " + esc (tname item.opt)
+        + " | " + esc (defv item.opt)
+        + " | " + esc (if item.opt ? description then item.opt.description else "")
+        + " | " + (let e = exv item.opt; in if e == "" then "" else esc e)
+        + " |";
+      section = name: is:
+        let
+          header = "** " + cap name + "\n| Option | Type | Default | Description | Example |\n|-" + (lib.concatStringsSep "-" (lib.replicate 4 "|-") ) + "|\n";
+          rows = lib.concatStringsSep "\n" (map row is);
+        in header + rows + "\n";
+      intro = ''#+TITLE: Nixerator Application Module Options
+#+OPTIONS: toc:2 num:t
+#+TOC: headlines 2
+
+This document lists the available options for the Nixerator application module,
+grouped by area. Values show types, defaults, and examples when available.
+
+* Usage
+#+BEGIN_SRC nix
+nixerator.lib.simple.yamlFromApp {
+  name = "myapp";
+  namespace = "default";
+  image = "repo/image:tag";
+  replicas = 2;
+  service.enable = true;
+  ingress.enable = true; ingress.host = "myapp.example.com";
+  hpa.enable = true; hpa.maxReplicas = 4;
+  pdb.enable = true; pdb.minAvailable = 1;
+  serviceAccount.enable = true;
+}
+#+END_SRC
+
+* Options
+'';
+      body = lib.concatStringsSep "\n" (
+        map (name: section name groups.${name}) (lib.attrNames groups)
+      );
+    in intro + body;
+
+  # Fancy docs from full eval (takes eval.options.app)
+  orgDocsFancyFromEval = eval: orgDocsFancyFromOptions eval.options.app;
+
   mkApp = {
     name,
     namespace ? "default",
