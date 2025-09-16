@@ -2,23 +2,22 @@ Nixerator is a Nix flake that helps you define common Kubernetes resources (Depl
 
 Quick start
 - Prereqs: Nix with flakes enabled.
-- Build example manifests (application module): `nix build .#manifests-basic && echo && cat result`
+- Build example manifests (application module): `nix build .#manifests && echo && cat result`
+ - Advanced example: `nix build .#manifests-advanced && echo && cat result`
  - Pretty JSON view: `make print-json` (after a build)
 
 Simple consumption (as a library)
-- In your flake, add input `nixerator` and build YAML from a plain attrset:
-  - `pkgs.writeText "manifest.yaml" (nixerator.lib.simple.yamlFromApp { name = "myapp"; image = "..."; service.enable = true; })`
-- Or get a structured result (resources + yaml):
-  - `nixerator.lib.simple.eval { app = { ... }; }`
-- See `templates/basic/` for a ready-to-copy consumer flake.
+- In your flake, add input `nixerator` and build from a plain attrset via the canonical builder:
+  - `let eval = nixerator.lib.buildApp { app = { name = "myapp"; image = "..."; service = { enable = true; }; }; }; in pkgs.writeText "manifest.yaml" eval.yaml`
+- The builder returns a structured result with `cfg`, `options`, `resources`, and `yaml`.
+- See `examples/` for ready-to-copy module configs.
 
 Modules workflow (recommended)
-- Evaluate module to manifests: `nix build .#manifests-module-basic && cat result`
-- Extended resources: `nix build .#manifests-module-extended && cat result`
-- Generate module docs (Org): `nix build .#docs-org && sed -n '1,80p' result`
- - Simple docs variant: `nix build .#docs-org-simple && sed -n '1,60p' result`
+- Evaluate module to manifests: `nix build .#manifests && cat result`
+- Advanced resources: `nix build .#manifests-advanced && cat result`
+- Generate module docs (Org): `nix build .#docs && sed -n '1,80p' result`
 
-The module lives at `nixosModules.app` and can be evaluated with `lib.evalModules`. Use `lib.evalAppModules { modules = [ self.nixosModules.app yourModule ]; }` to get `cfg`, `options`, `resources`, and `yaml`.
+The module lives at `nixosModules.app` and can be evaluated with `lib.evalModules`. Use `nixerator.lib.buildApp { app = { ... }; }` (or `nixerator.lib.evalAppModules` directly) to get `cfg`, `options`, `resources`, and `yaml`.
 
 What’s inside
 - `flake.nix` exposes the typed application module and builds `manifests-basic` by evaluating it. It also exposes extension modules and an extended example, plus a simple consumer entry under `lib.simple`.
@@ -49,7 +48,6 @@ Docs generation
 Testing and goldens
 - Run tests: `make test` (builds manifests via flake and diffs against `tests/golden/*.yaml`).
 - Update goldens: `make update-golden` (or `UPDATE_GOLDEN=1 tests/run.sh`).
-- Flake checks: `nix flake check` runs golden comparison and kubeconform validation for `manifests-basic`, `manifests-module-basic`, and `manifests-module-extended`.
 - Dev shell includes `kubeconform` and `yq` for local validation if you want to run it manually.
 
 Notes on kubeconform

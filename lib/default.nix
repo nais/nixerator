@@ -617,7 +617,7 @@ grouped by area. Values show types, defaults, and examples when available.
 
 * Usage
 #+BEGIN_SRC nix
-nixerator.lib.simple.yamlFromApp {
+nixerator.lib.buildApp { app = {
   name = "myapp";
   namespace = "default";
   image = "repo/image:tag";
@@ -627,7 +627,7 @@ nixerator.lib.simple.yamlFromApp {
   hpa.enable = true; hpa.maxReplicas = 4;
   pdb.enable = true; pdb.minAvailable = 1;
   serviceAccount.enable = true;
-}
+}; }.yaml
 #+END_SRC
 
 * Options
@@ -692,7 +692,7 @@ grouped by area. Each option shows its type, default, and description.
 
 * Usage
 #+BEGIN_SRC nix
-nixerator.lib.simple.yamlFromApp {
+nixerator.lib.buildApp { app = {
   name = "myapp";
   namespace = "default";
   image = "repo/image:tag";
@@ -702,7 +702,7 @@ nixerator.lib.simple.yamlFromApp {
   hpa.enable = true; hpa.maxReplicas = 4;
   pdb.enable = true; pdb.minAvailable = 1;
   serviceAccount.enable = true;
-}
+}; }.yaml
 #+END_SRC
 
 * Options
