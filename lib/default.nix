@@ -712,6 +712,7 @@ rec {
       spec = { inherit pool; };
     };
 
+  # As is tradition
   renderManifests = manifests:
     lib.concatStringsSep "\n---\n" (map toYaml manifests);
 

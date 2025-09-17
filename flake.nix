@@ -8,11 +8,9 @@
 
   outputs = { self, nixpkgs, flake-utils }:
     let
-      # System-agnostic library output
       nixeratorLib = import ./lib { lib = nixpkgs.lib; };
     in
       {
-        # Expose a single, canonical function to build apps
         lib = nixeratorLib // (let
           baseModules = with self.nixosModules; [
             app
@@ -103,7 +101,7 @@
           lib = pkgs.lib;
           nlib = import ./lib { inherit lib; };
         in {
-          # Canonical example manifests (basic)
+          # A very simple example
           packages.manifests = let
             eval = nlib.evalAppModules {
               modules = [ self.nixosModules.app (import ./examples/app-basic.nix) ];
@@ -111,15 +109,6 @@
             };
           in pkgs.writeText "manifest.yaml" eval.yaml;
 
-          # Advanced example: filesFrom PVC/EmptyDir, preStop, strategy
-          packages.manifests-advanced = let
-            eval = nlib.evalAppModules {
-              modules = [ self.nixosModules.app (import ./examples/app-advanced.nix) ];
-              specialArgs = { inherit lib; };
-            };
-          in pkgs.writeText "manifest.yaml" eval.yaml;
-
-          # Everything example: exercises most resource builders
           packages.manifests-everything = let
             eval = nlib.evalAppModules {
               modules = [
@@ -150,7 +139,7 @@
           packages.docs = let
             docModules = with self.nixosModules; [
               app
-              appAiven
+              Appaiven
               appVault
               appGcpBuckets
               appGcpCloudSQL
