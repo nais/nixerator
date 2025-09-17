@@ -139,7 +139,7 @@
           packages.docs = let
             docModules = with self.nixosModules; [
               app
-              Appaiven
+              appAiven
               appVault
               appGcpBuckets
               appGcpCloudSQL
