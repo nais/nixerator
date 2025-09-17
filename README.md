@@ -1,4 +1,6 @@
-Nixerator is a Nix flake that helps you define common Kubernetes resources (Deployments, Services, Ingresses, HPAs, Secrets) as Nix, and render them to YAML.
+Nixerator is a Nix flake that helps you define common Kubernetes resources (Deployments, Services, Ingresses, HPAs, Secrets etc) as Nix, and render them to YAML.
+
+It's an experiement in what if all resources were static artifacts and there was no app spec at all?
 
 Quick start
 - Prereqs: Nix with flakes enabled.
