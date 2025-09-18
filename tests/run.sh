@@ -65,16 +65,23 @@ if [[ -n "$MANIFEST_PACKAGES" ]]; then
   # Allow an override list via env var (space-separated)
   read -r -a names <<< "$MANIFEST_PACKAGES"
 else
+  # Derive current system from uname to avoid relying on builtins.currentSystem
+  uname_s=$(uname -s)
+  uname_m=$(uname -m)
+  case "$uname_s" in
+    Linux) os="linux" ;;
+    Darwin) os="darwin" ;;
+    *) echo "Unsupported OS: $uname_s" >&2; exit 1 ;;
+  esac
+  case "$uname_m" in
+    x86_64|amd64) arch="x86_64" ;;
+    arm64|aarch64) arch="aarch64" ;;
+    *) echo "Unsupported arch: $uname_m" >&2; exit 1 ;;
+  esac
+  sys="${arch}-${os}"
   while IFS= read -r name; do
     [[ -n "$name" ]] && names+=("$name")
-  done < <(nix eval --raw --impure --expr '
-    let f = builtins.getFlake (toString ./.);
-        sys = builtins.currentSystem;
-        pkgs = builtins.getAttr sys f.packages;
-        names = builtins.attrNames pkgs;
-        filtered = builtins.filter (n: builtins.match "^manifests.*" n != null) names;
-    in builtins.concatStringsSep "\n" filtered
-  ')
+  done < <(nix eval --json ".#packages.$sys" | "$YQ" -r 'keys | .[]' | grep '^manifests')
 fi
 
 for pkg in "${names[@]}"; do

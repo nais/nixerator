@@ -31,17 +31,26 @@ jobs:
         run: |
           set -euo pipefail
           echo "Deriving manifest packages dynamically"
-          nix eval --raw --expr '
-            let f = builtins.getFlake (toString ./.);
-                sys = builtins.currentSystem;
-                pkgs = builtins.getAttr sys f.packages;
-                names = builtins.attrNames pkgs;
-                filtered = builtins.filter (n: builtins.match "^manifests.*" n != null) names;
-            in builtins.concatStringsSep "\n" filtered
-          ' | while read -r pkg; do
-              echo "Building $pkg";
-              nix build ".#$pkg";
-              echo "Validating $pkg with kubeconform";
-              nix run nixpkgs#yq -- -P '.' result \
-                | nix run nixpkgs#kubeconform -- -strict -ignore-missing-schemas -summary -;
-            done
+          # Compute current system from uname to avoid relying on builtins.currentSystem
+          case "$(uname -s)" in
+            Linux) os=linux ;;
+            Darwin) os=darwin ;;
+            *) echo "Unsupported OS"; exit 1 ;;
+          esac
+          case "$(uname -m)" in
+            x86_64|amd64) arch=x86_64 ;;
+            arm64|aarch64) arch=aarch64 ;;
+            *) echo "Unsupported arch"; exit 1 ;;
+          esac
+          sys="$arch-$os"
+
+          nix eval --json ".#packages.$sys" \
+            | nix run nixpkgs#jq -- -r 'keys[]' \
+            | grep '^manifests' \
+            | while read -r pkg; do
+                echo "Building $pkg";
+                nix build ".#$pkg";
+                echo "Validating $pkg with kubeconform";
+                nix run nixpkgs#yq -- -P '.' result \
+                  | nix run nixpkgs#kubeconform -- -strict -ignore-missing-schemas -summary -;
+              done
