@@ -828,7 +828,12 @@ rec {
         if (preStopCfg.exec or null) != null && (preStopCfg.exec.command or []) != [] then {
           preStop = { exec = { command = preStopCfg.exec.command; }; };
         } else if (preStopCfg.http or null) != null && (preStopCfg.http.path or "") != "" then {
-          preStop = { httpGet = { path = preStopCfg.http.path; port = (preStopCfg.http.port or serviceCfg.targetPort); }; };
+          preStop = {
+            httpGet = {
+              path = preStopCfg.http.path;
+              port = if (preStopCfg.http.port or null) != null then preStopCfg.http.port else serviceCfg.targetPort;
+            };
+          };
         } else null
       );
       # strategy mapping

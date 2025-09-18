@@ -164,7 +164,7 @@ spec:
             preStop:
               httpGet:
                 path: /shutdown
-                port: null
+                port: 8080
           livenessProbe:
             failureThreshold: 3
             httpGet:
