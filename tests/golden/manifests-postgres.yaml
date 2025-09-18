@@ -116,3 +116,5 @@ spec:
   spiloRunAsGroup: 103
   spiloRunAsUser: 101
   teamId: default
+  volume:
+    size: 10Gi

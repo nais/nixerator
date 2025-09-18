@@ -71,10 +71,10 @@ Testing and goldens
 - Run tests: `make test` (builds manifests via flake and diffs against `tests/golden/*.yaml`).
 - Update goldens: `make update-golden` (or `UPDATE_GOLDEN=1 tests/run.sh`).
 - Dev shell includes `kubeconform` and `yq` for local validation if you want to run it manually.
+ - `nix flake check` runs golden comparisons against `tests/golden`, but skips `kubeconform` to avoid network access.
 
 Notes on kubeconform
-- Flake checks use offline-friendly flags: `-strict -ignore-missing-schemas`.
-- For stricter validation with network access, run kubeconform manually in the dev shell or configure CI to allow schema fetching.
+- Kubeconform is not run in flake checks (no network in many environments). Use the dev shell to run it manually, or enable it in CI where network access is allowed.
 
 Use the library in another flake
 - Add input: `nixerator.url = "github:YOUR_ORG/nixerator"` (or a local path while iterating).

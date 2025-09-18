@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  nix:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Nix (Determinate Systems)
+        uses: DeterminateSystems/nix-installer-action@v13
+
+      - name: Enable Magic Nix Cache
+        uses: DeterminateSystems/magic-nix-cache-action@v6
+
+      - name: Show flake outputs
+        run: nix flake show
+
+      - name: Run flake checks (goldens)
+        run: nix flake check --show-trace
+
+      - name: Kubeconform validation (networked)
+        run: |
+          set -euo pipefail
+          # List of manifest packages to validate; keep in sync with flake.nix checks
+          pkgs=(
+            manifests
+            manifests-everything
+            manifests-aiven
+            manifests-access-samens
+            manifests-access-egress
+            manifests-hpa-kafka
+            manifests-hpa-advanced
+            manifests-ingress-grpc
+            manifests-ingress-redirects
+            manifests-frontend
+            manifests-securelogs
+            manifests-vault-basic
+            manifests-vault-paths
+            manifests-gcp-buckets
+            manifests-gcp-buckets-iam
+            manifests-prom-annotations-advanced
+            manifests-prom-annotations-basic
+            manifests-prom-annotations-disabled
+            manifests-gcp-cloudsql
+            manifests-webproxy
+            manifests-integrations-stubs
+            manifests-leader-election
+            manifests-azure-application
+            manifests-azure-sidecar
+            manifests-azure-preauth
+            manifests-azure-preauth-advanced
+            manifests-idporten
+            manifests-tokenx
+            manifests-tokenx-access
+            manifests-tokenx-access-rules
+            manifests-maskinporten
+            manifests-texas
+            manifests-cabundle
+            manifests-login
+            manifests-postgres
+          )
+          for pkg in "${pkgs[@]}"; do
+            echo "Building $pkg"
+            nix build ".#$pkg"
+            echo "Validating $pkg with kubeconform"
+            # Canonicalize to YAML then validate; ignore missing CRD schemas but be strict otherwise
+            nix run nixpkgs#yq -- -P '.' result \
+              | nix run nixpkgs#kubeconform -- -strict -ignore-missing-schemas -summary -
+          done

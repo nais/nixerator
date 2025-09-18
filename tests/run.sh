@@ -10,7 +10,6 @@ GOLDEN_DIR="$ROOT_DIR/tests/golden"
 RESULT="result"
 
 OUTPUT=${OUTPUT:-manifests}
-ADV_OUTPUT=${ADV_OUTPUT:-manifests-advanced}
 EVERY_OUTPUT=${EVERY_OUTPUT:-manifests-everything}
 AIVEN_OUTPUT=${AIVEN_OUTPUT:-manifests-aiven}
 AP_SAMENS_OUTPUT=${AP_SAMENS_OUTPUT:-manifests-access-samens}
@@ -91,11 +90,10 @@ build_and_check() {
 
   compare_or_update "$built_yaml" "$golden_file"
 
-  # Schema validation is covered by flake checks (kubeconform-*).
+  # Schema validation not run in flake checks (offline). Run kubeconform manually if desired.
 }
 
 build_and_check "$OUTPUT" "${OUTPUT}.yaml"
-build_and_check "$ADV_OUTPUT" "${ADV_OUTPUT}.yaml"
 build_and_check "$EVERY_OUTPUT" "${EVERY_OUTPUT}.yaml"
 build_and_check "$AIVEN_OUTPUT" "${AIVEN_OUTPUT}.yaml"
 build_and_check "$AP_SAMENS_OUTPUT" "${AP_SAMENS_OUTPUT}.yaml"

@@ -69,7 +69,7 @@ print-docs: ## Print the generated Org docs.
 clean: ## Remove build artifacts and generated files.
 	rm -f $(RESULT) $(MANIFEST) $(DOC)
 
-test: ## Run golden tests (kubeconform runs via flake checks).
+test: ## Run golden tests.
 	bash tests/run.sh
 
 update-golden: ## Rebuild and update goldens (OUTPUT configurable).

@@ -186,6 +186,64 @@
           };
 
           formatter = pkgs.nixpkgs-fmt;
+          
+          # CI checks: golden diffs (kubeconform skipped offline)
+          checks = let
+            # List of manifest package names we verify
+            manifestNames = [
+              "manifests"
+              "manifests-everything"
+              "manifests-aiven"
+              "manifests-access-samens"
+              "manifests-access-egress"
+              "manifests-hpa-kafka"
+              "manifests-hpa-advanced"
+              "manifests-ingress-grpc"
+              "manifests-ingress-redirects"
+              "manifests-frontend"
+              "manifests-securelogs"
+              "manifests-vault-basic"
+              "manifests-vault-paths"
+              "manifests-gcp-buckets"
+              "manifests-gcp-buckets-iam"
+              "manifests-prom-annotations-advanced"
+              "manifests-prom-annotations-basic"
+              "manifests-prom-annotations-disabled"
+              "manifests-gcp-cloudsql"
+              "manifests-webproxy"
+              "manifests-integrations-stubs"
+              "manifests-leader-election"
+              "manifests-azure-application"
+              "manifests-azure-sidecar"
+              "manifests-azure-preauth"
+              "manifests-azure-preauth-advanced"
+              "manifests-idporten"
+              "manifests-tokenx"
+              "manifests-tokenx-access"
+              "manifests-tokenx-access-rules"
+              "manifests-maskinporten"
+              "manifests-texas"
+              "manifests-cabundle"
+              "manifests-login"
+              "manifests-postgres"
+            ];
+            pkgsFor = self.packages.${system};
+            goldenDir = ./tests/golden;
+
+            goldenCheckFor = name: pkgs.runCommand "golden-${name}" {
+              nativeBuildInputs = [ pkgs.diffutils pkgs.yq-go ];
+            } ''
+              set -euo pipefail
+              # Canonicalize and compare built YAML against the golden
+              ${pkgs.yq-go}/bin/yq -P 'sort_keys(..)' < ${pkgsFor."${name}"} > built.yaml
+              ${pkgs.yq-go}/bin/yq -P 'sort_keys(..)' < ${goldenDir}/${name}.yaml > golden.yaml
+              diff -u golden.yaml built.yaml
+              touch "$out"
+            '';
+
+            asAttrs = pairs: builtins.listToAttrs pairs;
+          in
+            asAttrs (map (n: { name = "golden-" + n; value = goldenCheckFor n; }) manifestNames);
           # Aiven example
           packages.manifests-aiven = let
             eval = nlib.evalAppModules {
