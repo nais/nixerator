@@ -51,6 +51,6 @@ jobs:
                 echo "Building $pkg";
                 nix build ".#$pkg";
                 echo "Validating $pkg with kubeconform";
-                nix run nixpkgs#yq -- -P '.' result \
+                nix run nixpkgs#yq-go -- -P '.' result \
                   | nix run nixpkgs#kubeconform -- -strict -ignore-missing-schemas -summary -;
               done

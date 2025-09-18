@@ -11,6 +11,7 @@ RESULT="result"
 
 MANIFEST_PACKAGES=${MANIFEST_PACKAGES:-}
 
+# Use yq-go (binary name is 'yq' in Nix)
 YQ=${YQ:-yq}
 
 mkdir -p "$GOLDEN_DIR"
