@@ -1868,6 +1868,228 @@ export default {
       yaml = built.yaml;
     };
 
+  # Convert our typed app module config to a Naiserator Application resource
+  # (apiVersion: nais.io/v1alpha1, kind: Application).
+  # This creates a best-effort mapping of common fields; it omits null/empty values.
+  toNaiseratorApplication = cfg:
+    let
+      name = cfg.name;
+      namespace = cfg.namespace;
+      labels = cfg.labels or {};
+      labelsDefaults = (cfg.labelsDefaults or {});
+      labelsWithTeam = if (labelsDefaults.addTeam or false) then (labels // { team = namespace; }) else labels;
+      serviceCfg = cfg.service;
+      ingressCfg = cfg.ingress or { enable = false; host = null; };
+      prometheusCfg = cfg.prometheus or { enable = false; };
+      obsCfg = cfg.observability or {};
+      azureCfg = cfg.azure or { application = { enabled = false; }; sidecar = { enabled = false; }; };
+      idpCfg = cfg.idporten or {
+        enable = false;
+        sidecar = {
+          enabled = false;
+          autoLogin = false;
+          autoLoginIgnorePaths = [];
+          level = null;
+          locale = null;
+        };
+      };
+      loginCfg = cfg.login or { enable = false; };
+      aivenCfg = cfg.aiven or { enable = false; };
+      apCfg = cfg.accessPolicy or { enable = false; inbound = { rules = []; }; outbound = {}; };
+      envList = ensureEnv (cfg.env or {});
+      envFromList = map (ef:
+        if (ef.configMap or "") != "" then { configmap = ef.configMap; }
+        else if (ef.secret or "") != "" then { secret = ef.secret; }
+        else {}
+      ) (cfg.envFrom or []);
+      filesFromList = map (f:
+        let base = { mountPath = f.mountPath; };
+        in base
+          // (if (f.configMap or "") != "" then { configmap = f.configMap; } else {})
+          // (if (f.secret or "") != "" then { secret = f.secret; } else {})
+          // (if (f.persistentVolumeClaim or "") != "" then { persistentVolumeClaim = f.persistentVolumeClaim; } else {})
+          // (let ed = f.emptyDir or null; in if ed == null then {} else { emptyDir = ed; })
+      ) (cfg.filesFrom or []);
+      # Probes mapping (NAIS Application uses liveness/readiness/startup with path/port etc.)
+      probeBase = probeCfg:
+        let
+          path = probeCfg.path or "";
+          port = if (probeCfg.port or null) != null then probeCfg.port else serviceCfg.targetPort;
+        in if path == "" then null else {
+          inherit path port;
+          initialDelay = probeCfg.initialDelaySeconds or 0;
+          periodSeconds = probeCfg.periodSeconds or 10;
+          timeout = probeCfg.timeoutSeconds or 1;
+          failureThreshold = probeCfg.failureThreshold or 3;
+        };
+      liveness = probeBase (cfg.probes.liveness or { path = ""; });
+      readiness = probeBase (cfg.probes.readiness or { path = ""; });
+      startup = probeBase (cfg.probes.startup or { path = ""; });
+      # preStop mapping (both legacy path and explicit http/exec)
+      preStopCfg = cfg.preStop or null;
+      preStopHook = if preStopCfg == null then null else (
+        if (preStopCfg.exec or null) != null && (preStopCfg.exec.command or []) != [] then {
+          exec = { command = preStopCfg.exec.command; };
+        } else if (preStopCfg.http or null) != null && (preStopCfg.http.path or "") != "" then {
+          http = {
+            path = preStopCfg.http.path;
+            port = if (preStopCfg.http.port or null) != null then preStopCfg.http.port else serviceCfg.targetPort;
+          };
+        } else null
+      );
+      preStopHookPath = if preStopHook == null then (cfg.preStopHookPath or null) else (cfg.preStopHookPath or preStopHook.http.path or null);
+      # Prometheus mapping
+      prom = if (prometheusCfg.enable or false) then (
+        let p = {
+          path = if (prometheusCfg.path or null) != null then prometheusCfg.path else "/metrics";
+          port = if (prometheusCfg.port or null) != null then prometheusCfg.port else (toString serviceCfg.targetPort);
+        }; in p
+      ) else null;
+      ingresses = if (ingressCfg.enable or false) && (ingressCfg.host or null) != null then [ ("https://" + ingressCfg.host) ] else [];
+      # AccessPolicy mapping (subset)
+      inboundRules = map (r: {
+        application = r.application;
+      } // (lib.optionalAttrs ((r.namespace or null) != null) { namespace = r.namespace; })
+        // (lib.optionalAttrs ((r.cluster or null) != null) { cluster = r.cluster; })
+        // (let perms = r.permissions or { roles = []; scopes = []; }; in lib.optionalAttrs ((perms.roles or []) != [] || (perms.scopes or []) != []) { permissions = perms; })
+      ) (apCfg.inbound.rules or []);
+      outboundRules = [];
+      outboundExternal = map (e: { host = e.host; } // (lib.optionalAttrs ((e.ports or []) != []) { ports = map (p: { port = p; }) e.ports; })) ((apCfg.outbound or { allowedFQDNs = []; }).allowedFQDNs or []);
+      accessPolicy =
+        if ! (apCfg.enable or false) && inboundRules == [] && outboundRules == [] && outboundExternal == [] then null else {
+          inbound = lib.optionalAttrs (inboundRules != []) { rules = inboundRules; };
+          outbound = lib.optionalAttrs (outboundRules != [] || outboundExternal != []) (
+            (lib.optionalAttrs (outboundRules != []) { rules = outboundRules; })
+            // (lib.optionalAttrs (outboundExternal != []) { external = outboundExternal; })
+          );
+        };
+      # Observability
+      logformat = if (obsCfg.logformat or "") != "" then obsCfg.logformat else null;
+      logtransform = if (obsCfg.logtransform or "") != "" then obsCfg.logtransform else null;
+      # Azure
+      azure =
+        let app = azureCfg.application or { enabled = false; }; side = azureCfg.sidecar or { enabled = false; };
+        in if !(app.enabled or false) && !(side.enabled or false) then null else {
+          application = lib.optionalAttrs (app.enabled or false) ({
+            enabled = true;
+          } // (lib.optionalAttrs ((app.tenant or null) != null) { tenant = app.tenant; })
+            // (lib.optionalAttrs ((app.claims or {}) != {}) { claims = app.claims; })
+            // (lib.optionalAttrs ((app.allowAllUsers or false)) { allowAllUsers = true; })) ;
+          sidecar = lib.optionalAttrs (side.enabled or false) ({
+            enabled = true;
+          } // (lib.optionalAttrs (side.autoLogin or false) { autoLogin = true; })
+            // (lib.optionalAttrs ((side.autoLoginIgnorePaths or []) != []) { autoLoginIgnorePaths = side.autoLoginIgnorePaths; }));
+        };
+      # IDPorten (sidecar only)
+      idporten = lib.optionalAttrs (idpCfg.enable or false) {
+        enabled = true;
+        sidecar = lib.optionalAttrs ((idpCfg.sidecar or { enabled = false; }).enabled or false) ({
+          enabled = true;
+        } // (lib.optionalAttrs ((idpCfg.sidecar.autoLogin or false)) { autoLogin = true; })
+          // (lib.optionalAttrs ((idpCfg.sidecar.autoLoginIgnorePaths or []) != []) { autoLoginIgnorePaths = idpCfg.sidecar.autoLoginIgnorePaths; })
+          // (lib.optionalAttrs ((idpCfg.sidecar.level or null) != null) { level = idpCfg.sidecar.level; })
+          // (lib.optionalAttrs ((idpCfg.sidecar.locale or null) != null) { locale = idpCfg.sidecar.locale; }));
+      };
+      # Login
+      login = if (loginCfg.enable or false) then ({ provider = loginCfg.provider or "openid"; enforce = loginCfg.enforce or { enabled = false; excludePaths = []; }; }) else null;
+      # Kafka / OpenSearch / Valkey (Aiven)
+      kafka = if (aivenCfg.kafka or null) == null then null else ({ pool = aivenCfg.kafka.pool; streams = aivenCfg.kafka.streams or false; });
+      openSearch = if (aivenCfg.openSearch or null) == null then null else ({ instance = aivenCfg.openSearch.instance; access = aivenCfg.openSearch.access or "read"; });
+      valkey = map (v: { instance = v.instance; access = v.access or "read"; }) (aivenCfg.valkey or []);
+      # Leader election
+      leaderElection = if ((cfg.leaderElection or { enable = false; }).enable or false) then true else null;
+      # Prometheus annotations style (simple)
+    in {
+      apiVersion = "nais.io/v1alpha1";
+      kind = "Application";
+      metadata = {
+        inherit name namespace;
+        labels = labelsWithTeam;
+      };
+      spec = ({
+        image = cfg.image;
+        port = serviceCfg.targetPort;
+        ingresses = ingresses;
+      }
+      // (lib.optionalAttrs ((cfg.command or []) != []) { command = cfg.command; })
+      // (lib.optionalAttrs (envList != []) { env = envList; })
+      // (lib.optionalAttrs (envFromList != []) { envFrom = envFromList; })
+      // (lib.optionalAttrs (filesFromList != []) { filesFrom = filesFromList; })
+      // (lib.optionalAttrs (liveness != null) { liveness = liveness; })
+      // (lib.optionalAttrs (readiness != null) { readiness = readiness; })
+      // (lib.optionalAttrs (startup != null) { startup = startup; })
+      // (lib.optionalAttrs (preStopHook != null) { preStopHook = preStopHook; })
+      // (lib.optionalAttrs (preStopHookPath != null) { preStopHookPath = preStopHookPath; })
+      // (lib.optionalAttrs ((cfg.replicas or 1) != 1) { replicas = cfg.replicas; })
+      // (lib.optionalAttrs ((cfg.resources or { limits = {}; requests = {}; }) != { limits = {}; requests = {}; }) { resources = cfg.resources; })
+      // (lib.optionalAttrs (prom != null) { prometheus = ({ enabled = true; } // prom); })
+      // (lib.optionalAttrs (accessPolicy != null) { accessPolicy = accessPolicy; })
+      // (lib.optionalAttrs (logformat != null) { inherit logformat; })
+      // (lib.optionalAttrs (logtransform != null) { inherit logtransform; })
+      # NOTE: Naiserator uses logformat/logtransform annotations; included for parity
+      # They are part of spec in newer versions too; include when provided
+      # leave empty otherwise
+      #
+      # also pass through tracing/logging in observability if desired later
+      // (lib.optionalAttrs (azure != null) { inherit azure; })
+      // (lib.optionalAttrs (idporten != {}) { inherit idporten; })
+      // (lib.optionalAttrs (login != null) { inherit login; })
+      // (lib.optionalAttrs (kafka != null) { inherit kafka; })
+      // (lib.optionalAttrs (openSearch != null) { inherit openSearch; })
+      // (lib.optionalAttrs (valkey != []) { inherit valkey; })
+      // (lib.optionalAttrs (leaderElection != null) { leaderElection = leaderElection; })
+      );
+    };
+
+  # Convenience: evaluate app modules and render NAIS Application YAML
+  buildNaiseratorApplication = { app, extraModules ? [], specialArgs ? {} }:
+    let
+      baseModules = [
+        (import ../modules/app.nix)
+        (import ../modules/ext/aiven.nix)
+        (import ../modules/ext/vault.nix)
+        (import ../modules/ext/gcp-buckets.nix)
+        (import ../modules/ext/gcp-cloudsql.nix)
+        (import ../modules/ext/gcp-bigquery.nix)
+        (import ../modules/ext/azure.nix)
+        (import ../modules/ext/idporten.nix)
+        (import ../modules/ext/securelogs.nix)
+        (import ../modules/ext/frontend.nix)
+        (import ../modules/ext/pdb.nix)
+        (import ../modules/ext/serviceaccount.nix)
+        (import ../modules/ext/configmap.nix)
+        (import ../modules/ext/networkpolicy.nix)
+        (import ../modules/ext/accesspolicy.nix)
+        (import ../modules/ext/fqdnpolicy.nix)
+        (import ../modules/ext/prometheus.nix)
+        (import ../modules/ext/podsecurity.nix)
+        (import ../modules/ext/observability.nix)
+        (import ../modules/ext/defaultenv.nix)
+        (import ../modules/ext/tokenx.nix)
+        (import ../modules/ext/maskinporten.nix)
+        (import ../modules/ext/texas.nix)
+        (import ../modules/ext/cabundle.nix)
+        (import ../modules/ext/postgres.nix)
+        (import ../modules/ext/login.nix)
+        (import ../modules/ext/webproxy.nix)
+        (import ../modules/ext/leaderelection.nix)
+        (import ../modules/ext/integrations.nix)
+        (import ../modules/ext/reloader.nix)
+        (import ../modules/ext/ttl.nix)
+        (import ../modules/ext/labels-defaults.nix)
+        (import ../modules/ext/scheduling.nix)
+        (import ../modules/ext/hostaliases.nix)
+      ];
+      eval = evalAppModules {
+        modules = baseModules ++ extraModules ++ [ ({ lib, ... }: { config.app = app; }) ];
+        specialArgs = specialArgs // { inherit lib; };
+      };
+      appRes = toNaiseratorApplication eval.cfg;
+    in {
+      application = appRes;
+      yaml = renderManifests [ appRes ];
+    };
+
   # Generate an Emacs Org document from an options tree (e.g., eval.options.app)
   orgDocsFromOptions = opts:
     let

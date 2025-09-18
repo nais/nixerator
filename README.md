@@ -67,6 +67,12 @@ Recently added toward Naiserator parity
 Docs generation
 - `lib.orgDocsFromOptions` and `lib.orgDocsFromEval` turn the evaluated options tree into an Emacs Org file listing option names, types, defaults, and descriptions.
 
+Naiserator Application (app.yaml)
+- Generate a Naiserator `Application` resource (application.nais.io) from the same typed app module:
+  - Nix: `let app = { name = "myapp"; namespace = "team"; image = "repo/image:tag"; service.enable = true; }; in (nixerator.lib.buildNaiseratorApplication { inherit app; }).yaml`
+  - Or from an evaluated cfg: `nixerator.lib.toNaiseratorApplication eval.cfg` and render via `lib.renderManifests`.
+- The mapping is best‑effort and focuses on common fields (image, port, ingresses, env/envFrom, filesFrom, probes, preStop, accessPolicy, Azure/IDPorten/login, Aiven subsets). Missing fields can be added incrementally.
+
 Testing and goldens
 - Run tests: `make test` (builds manifests via flake and diffs against `tests/golden/*.yaml`).
 - Update goldens: `make update-golden` (or `UPDATE_GOLDEN=1 tests/run.sh`).

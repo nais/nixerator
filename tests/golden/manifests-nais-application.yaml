@@ -1,0 +1,120 @@
+apiVersion: nais.io/v1alpha1
+kind: Application
+metadata:
+  labels: {}
+  name: myapplication
+  namespace: myteam
+spec:
+  accessPolicy:
+    inbound:
+      rules:
+        - application: app1
+        - application: app2
+          namespace: q1
+        - application: app3
+          cluster: dev-gcp
+          namespace: q2
+    outbound:
+      external:
+        - host: external-application.example.com
+          ports:
+            - port: 443
+        - host: non-http-service.example.com
+          ports:
+            - port: 9200
+  azure:
+    application:
+      allowAllUsers: true
+      claims:
+        groups:
+          - id: 00000000-0000-0000-0000-000000000000
+      enabled: true
+      tenant: nav.no
+    sidecar:
+      autoLogin: true
+      autoLoginIgnorePaths:
+        - /path
+        - /internal/*
+      enabled: true
+  env:
+    - name: MY_CUSTOM_VAR
+      value: some_value
+  envFrom:
+    - secret: my-secret-with-envs
+    - configmap: my-configmap-with-envs
+  filesFrom:
+    - configmap: example-files-configmap
+      mountPath: /var/run/configmaps
+    - mountPath: /var/run/secrets
+      secret: my-secret-file
+    - emptyDir:
+        medium: Memory
+      mountPath: /var/cache
+    - mountPath: /var/run/pvc
+      persistentVolumeClaim: pvc-name
+  idporten:
+    enabled: true
+    sidecar:
+      autoLogin: true
+      autoLoginIgnorePaths:
+        - /path
+        - /internal/*
+      enabled: true
+      level: idporten-loa-high
+      locale: nb
+  image: navikt/testapp:69.0.0
+  ingresses:
+    - https://myapplication.nav.no
+  kafka:
+    pool: nav-dev
+    streams: true
+  leaderElection: true
+  liveness:
+    failureThreshold: 10
+    initialDelay: 20
+    path: /isalive
+    periodSeconds: 5
+    port: 8080
+    timeout: 1
+  login:
+    enforce:
+      enabled: true
+      excludePaths:
+        - /some/path
+        - /api/**
+    provider: openid
+  port: 8080
+  preStopHook:
+    http:
+      path: /internal/stop
+      port: 8080
+  preStopHookPath: /internal/stop
+  prometheus:
+    enabled: true
+    path: /metrics
+    port: "8080"
+  readiness:
+    failureThreshold: 10
+    initialDelay: 20
+    path: /isready
+    periodSeconds: 5
+    port: 8080
+    timeout: 1
+  replicas: 2
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 200m
+      memory: 256Mi
+  startup:
+    failureThreshold: 10
+    initialDelay: 20
+    path: /started
+    periodSeconds: 5
+    port: 8080
+    timeout: 1
+  valkey:
+    - access: write
+      instance: cache
