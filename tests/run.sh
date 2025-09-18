@@ -9,41 +9,7 @@ ROOT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 GOLDEN_DIR="$ROOT_DIR/tests/golden"
 RESULT="result"
 
-OUTPUT=${OUTPUT:-manifests}
-EVERY_OUTPUT=${EVERY_OUTPUT:-manifests-everything}
-AIVEN_OUTPUT=${AIVEN_OUTPUT:-manifests-aiven}
-AP_SAMENS_OUTPUT=${AP_SAMENS_OUTPUT:-manifests-access-samens}
-AP_EGRESS_OUTPUT=${AP_EGRESS_OUTPUT:-manifests-access-egress}
-HPA_KAFKA_OUTPUT=${HPA_KAFKA_OUTPUT:-manifests-hpa-kafka}
-HPA_ADV_OUTPUT=${HPA_ADV_OUTPUT:-manifests-hpa-advanced}
-ING_GRPC_OUTPUT=${ING_GRPC_OUTPUT:-manifests-ingress-grpc}
-ING_REDIR_OUTPUT=${ING_REDIR_OUTPUT:-manifests-ingress-redirects}
-FRONTEND_OUTPUT=${FRONTEND_OUTPUT:-manifests-frontend}
-SECURELOGS_OUTPUT=${SECURELOGS_OUTPUT:-manifests-securelogs}
-VAULT_BASIC_OUTPUT=${VAULT_BASIC_OUTPUT:-manifests-vault-basic}
-VAULT_PATHS_OUTPUT=${VAULT_PATHS_OUTPUT:-manifests-vault-paths}
-GCP_BUCKETS_OUTPUT=${GCP_BUCKETS_OUTPUT:-manifests-gcp-buckets}
-GCP_BUCKETS_IAM_OUTPUT=${GCP_BUCKETS_IAM_OUTPUT:-manifests-gcp-buckets-iam}
-PROM_ANN_ADV_OUTPUT=${PROM_ANN_ADV_OUTPUT:-manifests-prom-annotations-advanced}
-PROM_ANN_BASIC_OUTPUT=${PROM_ANN_BASIC_OUTPUT:-manifests-prom-annotations-basic}
-PROM_ANN_DISABLED_OUTPUT=${PROM_ANN_DISABLED_OUTPUT:-manifests-prom-annotations-disabled}
-GCP_CLOUDSQL_OUTPUT=${GCP_CLOUDSQL_OUTPUT:-manifests-gcp-cloudsql}
-WEBPROXY_OUTPUT=${WEBPROXY_OUTPUT:-manifests-webproxy}
-INTEGRATIONS_STUBS_OUTPUT=${INTEGRATIONS_STUBS_OUTPUT:-manifests-integrations-stubs}
-LEADER_ELECTION_OUTPUT=${LEADER_ELECTION_OUTPUT:-manifests-leader-election}
-AZURE_APP_OUTPUT=${AZURE_APP_OUTPUT:-manifests-azure-application}
-AZURE_SIDECAR_OUTPUT=${AZURE_SIDECAR_OUTPUT:-manifests-azure-sidecar}
-AZURE_PREAUTH_OUTPUT=${AZURE_PREAUTH_OUTPUT:-manifests-azure-preauth}
-AZURE_PREAUTH_ADV_OUTPUT=${AZURE_PREAUTH_ADV_OUTPUT:-manifests-azure-preauth-advanced}
-IDPORTEN_OUTPUT=${IDPORTEN_OUTPUT:-manifests-idporten}
-TOKENX_OUTPUT=${TOKENX_OUTPUT:-manifests-tokenx}
-TOKENX_ACCESS_OUTPUT=${TOKENX_ACCESS_OUTPUT:-manifests-tokenx-access}
-TOKENX_ACCESS_RULES_OUTPUT=${TOKENX_ACCESS_RULES_OUTPUT:-manifests-tokenx-access-rules}
-MASKINPORTEN_OUTPUT=${MASKINPORTEN_OUTPUT:-manifests-maskinporten}
-TEXAS_OUTPUT=${TEXAS_OUTPUT:-manifests-texas}
-CABUNDLE_OUTPUT=${CABUNDLE_OUTPUT:-manifests-cabundle}
-LOGIN_OUTPUT=${LOGIN_OUTPUT:-manifests-login}
-POSTGRES_OUTPUT=${POSTGRES_OUTPUT:-manifests-postgres}
+MANIFEST_PACKAGES=${MANIFEST_PACKAGES:-}
 
 YQ=${YQ:-yq}
 
@@ -93,40 +59,26 @@ build_and_check() {
   # Schema validation not run in flake checks (offline). Run kubeconform manually if desired.
 }
 
-build_and_check "$OUTPUT" "${OUTPUT}.yaml"
-build_and_check "$EVERY_OUTPUT" "${EVERY_OUTPUT}.yaml"
-build_and_check "$AIVEN_OUTPUT" "${AIVEN_OUTPUT}.yaml"
-build_and_check "$AP_SAMENS_OUTPUT" "${AP_SAMENS_OUTPUT}.yaml"
-build_and_check "$AP_EGRESS_OUTPUT" "${AP_EGRESS_OUTPUT}.yaml"
-build_and_check "$HPA_KAFKA_OUTPUT" "${HPA_KAFKA_OUTPUT}.yaml"
-build_and_check "$HPA_ADV_OUTPUT" "${HPA_ADV_OUTPUT}.yaml"
-build_and_check "$ING_GRPC_OUTPUT" "${ING_GRPC_OUTPUT}.yaml"
-build_and_check "$ING_REDIR_OUTPUT" "${ING_REDIR_OUTPUT}.yaml"
-build_and_check "$FRONTEND_OUTPUT" "${FRONTEND_OUTPUT}.yaml"
-build_and_check "$SECURELOGS_OUTPUT" "${SECURELOGS_OUTPUT}.yaml"
-build_and_check "$VAULT_BASIC_OUTPUT" "${VAULT_BASIC_OUTPUT}.yaml"
-build_and_check "$VAULT_PATHS_OUTPUT" "${VAULT_PATHS_OUTPUT}.yaml"
-build_and_check "$GCP_BUCKETS_OUTPUT" "${GCP_BUCKETS_OUTPUT}.yaml"
-build_and_check "$GCP_BUCKETS_IAM_OUTPUT" "${GCP_BUCKETS_IAM_OUTPUT}.yaml"
-build_and_check "$PROM_ANN_ADV_OUTPUT" "${PROM_ANN_ADV_OUTPUT}.yaml"
-build_and_check "$PROM_ANN_BASIC_OUTPUT" "${PROM_ANN_BASIC_OUTPUT}.yaml"
-build_and_check "$PROM_ANN_DISABLED_OUTPUT" "${PROM_ANN_DISABLED_OUTPUT}.yaml"
-build_and_check "$GCP_CLOUDSQL_OUTPUT" "${GCP_CLOUDSQL_OUTPUT}.yaml"
-build_and_check "$WEBPROXY_OUTPUT" "${WEBPROXY_OUTPUT}.yaml"
-build_and_check "$INTEGRATIONS_STUBS_OUTPUT" "${INTEGRATIONS_STUBS_OUTPUT}.yaml"
-build_and_check "$LEADER_ELECTION_OUTPUT" "${LEADER_ELECTION_OUTPUT}.yaml"
-build_and_check "$AZURE_APP_OUTPUT" "${AZURE_APP_OUTPUT}.yaml"
-build_and_check "$AZURE_SIDECAR_OUTPUT" "${AZURE_SIDECAR_OUTPUT}.yaml"
-build_and_check "$AZURE_PREAUTH_OUTPUT" "${AZURE_PREAUTH_OUTPUT}.yaml"
-build_and_check "$AZURE_PREAUTH_ADV_OUTPUT" "${AZURE_PREAUTH_ADV_OUTPUT}.yaml"
-build_and_check "$IDPORTEN_OUTPUT" "${IDPORTEN_OUTPUT}.yaml"
-build_and_check "$TOKENX_OUTPUT" "${TOKENX_OUTPUT}.yaml"
-build_and_check "$TOKENX_ACCESS_OUTPUT" "${TOKENX_ACCESS_OUTPUT}.yaml"
-build_and_check "$TOKENX_ACCESS_RULES_OUTPUT" "${TOKENX_ACCESS_RULES_OUTPUT}.yaml"
-build_and_check "$MASKINPORTEN_OUTPUT" "${MASKINPORTEN_OUTPUT}.yaml"
-build_and_check "$TEXAS_OUTPUT" "${TEXAS_OUTPUT}.yaml"
-build_and_check "$CABUNDLE_OUTPUT" "${CABUNDLE_OUTPUT}.yaml"
-build_and_check "$LOGIN_OUTPUT" "${LOGIN_OUTPUT}.yaml"
-build_and_check "$POSTGRES_OUTPUT" "${POSTGRES_OUTPUT}.yaml"
+# Determine manifest package names dynamically (prefix "manifests").
+names=()
+if [[ -n "$MANIFEST_PACKAGES" ]]; then
+  # Allow an override list via env var (space-separated)
+  read -r -a names <<< "$MANIFEST_PACKAGES"
+else
+  while IFS= read -r name; do
+    [[ -n "$name" ]] && names+=("$name")
+  done < <(nix eval --raw --impure --expr '
+    let f = builtins.getFlake (toString ./.);
+        sys = builtins.currentSystem;
+        pkgs = builtins.getAttr sys f.packages;
+        names = builtins.attrNames pkgs;
+        filtered = builtins.filter (n: builtins.match "^manifests.*" n != null) names;
+    in builtins.concatStringsSep "\n" filtered
+  ')
+fi
+
+for pkg in "${names[@]}"; do
+  build_and_check "$pkg" "${pkg}.yaml"
+done
 
 echo "All tests passed."

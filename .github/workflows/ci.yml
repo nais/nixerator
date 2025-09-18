@@ -30,49 +30,18 @@ jobs:
       - name: Kubeconform validation (networked)
         run: |
           set -euo pipefail
-          # List of manifest packages to validate; keep in sync with flake.nix checks
-          pkgs=(
-            manifests
-            manifests-everything
-            manifests-aiven
-            manifests-access-samens
-            manifests-access-egress
-            manifests-hpa-kafka
-            manifests-hpa-advanced
-            manifests-ingress-grpc
-            manifests-ingress-redirects
-            manifests-frontend
-            manifests-securelogs
-            manifests-vault-basic
-            manifests-vault-paths
-            manifests-gcp-buckets
-            manifests-gcp-buckets-iam
-            manifests-prom-annotations-advanced
-            manifests-prom-annotations-basic
-            manifests-prom-annotations-disabled
-            manifests-gcp-cloudsql
-            manifests-webproxy
-            manifests-integrations-stubs
-            manifests-leader-election
-            manifests-azure-application
-            manifests-azure-sidecar
-            manifests-azure-preauth
-            manifests-azure-preauth-advanced
-            manifests-idporten
-            manifests-tokenx
-            manifests-tokenx-access
-            manifests-tokenx-access-rules
-            manifests-maskinporten
-            manifests-texas
-            manifests-cabundle
-            manifests-login
-            manifests-postgres
-          )
-          for pkg in "${pkgs[@]}"; do
-            echo "Building $pkg"
-            nix build ".#$pkg"
-            echo "Validating $pkg with kubeconform"
-            # Canonicalize to YAML then validate; ignore missing CRD schemas but be strict otherwise
-            nix run nixpkgs#yq -- -P '.' result \
-              | nix run nixpkgs#kubeconform -- -strict -ignore-missing-schemas -summary -
-          done
+          echo "Deriving manifest packages dynamically"
+          nix eval --raw --expr '
+            let f = builtins.getFlake (toString ./.);
+                sys = builtins.currentSystem;
+                pkgs = builtins.getAttr sys f.packages;
+                names = builtins.attrNames pkgs;
+                filtered = builtins.filter (n: builtins.match "^manifests.*" n != null) names;
+            in builtins.concatStringsSep "\n" filtered
+          ' | while read -r pkg; do
+              echo "Building $pkg";
+              nix build ".#$pkg";
+              echo "Validating $pkg with kubeconform";
+              nix run nixpkgs#yq -- -P '.' result \
+                | nix run nixpkgs#kubeconform -- -strict -ignore-missing-schemas -summary -;
+            done
