@@ -1871,7 +1871,7 @@ export default {
   # Convert our typed app module config to a Naiserator Application resource
   # (apiVersion: nais.io/v1alpha1, kind: Application).
   # This creates a best-effort mapping of common fields; it omits null/empty values.
-  toNaiseratorApplication = cfg:
+  toNaisApplication = cfg:
     let
       name = cfg.name;
       namespace = cfg.namespace;
@@ -2084,7 +2084,7 @@ export default {
         modules = baseModules ++ extraModules ++ [ ({ lib, ... }: { config.app = app; }) ];
         specialArgs = specialArgs // { inherit lib; };
       };
-      appRes = toNaiseratorApplication eval.cfg;
+      appRes = toNaisApplication eval.cfg;
     in {
       application = appRes;
       yaml = renderManifests [ appRes ];

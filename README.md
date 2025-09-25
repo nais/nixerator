@@ -70,7 +70,7 @@ Docs generation
 Naiserator Application (app.yaml)
 - Generate a Naiserator `Application` resource (application.nais.io) from the same typed app module:
   - Nix: `let app = { name = "myapp"; namespace = "team"; image = "repo/image:tag"; service.enable = true; }; in (nixerator.lib.buildNaiseratorApplication { inherit app; }).yaml`
-  - Or from an evaluated cfg: `nixerator.lib.toNaiseratorApplication eval.cfg` and render via `lib.renderManifests`.
+  - Or from an evaluated cfg: `nixerator.lib.toNaisApplication eval.cfg` and render via `lib.renderManifests`.
 - The mapping is best‑effort and focuses on common fields (image, port, ingresses, env/envFrom, filesFrom, probes, preStop, accessPolicy, Azure/IDPorten/login, Aiven subsets). Missing fields can be added incrementally.
 
 Testing and goldens
