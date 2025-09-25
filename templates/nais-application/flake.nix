@@ -20,7 +20,7 @@
         in {
           # Build an application.nais.io-style manifest (Application kind)
           app = let
-            built = nixerator.lib.buildNaiseratorApplication {
+            built = nixerator.lib.buildNaisApplication {
               app = {
                 name = "myapplication";
                 namespace = "myteam";
